@@ -16,6 +16,7 @@ class State():
 		self.last_pos = mouse.get_pos()
 		self.last_time = time()
 		self.minimized = False
+		self.count = 0
 		self.setup()
 		self.handle_update()
 
@@ -57,11 +58,14 @@ class State():
 	def draw(self):
 		display.update()
 
-	def tick(self, fps = 60):
+	def tick(self, fps = 30):
 		interval = 1./fps
 		delta = time() - self.last_time
 		if delta < interval:
 			sleep(interval - delta)
+		else:
+			self.count += 1
+			print "lagging", self.count
 		self.last_time = time()
 
 	def present_other_scene(self, other_scene):
@@ -255,8 +259,8 @@ class Button:
 class GameState(State):
 
 	def setup(self):
-		self.world_width = 128
-		self.world_height = 128
+		self.world_width = 200
+		self.world_height = 200
 		self.tile_length = 64
 		self.world = Surface((self.world_width*self.tile_length, self.world_height*self.tile_length))
 		self.world_available = [[True for x in range(self.world_width)] for y in range(self.world_height)]
@@ -275,15 +279,16 @@ class GameState(State):
 		self.button_row2 = [self.button4, self.button5, self.button6]
 		self.button_row3 = [self.button7, self.button8, self.button9]
 		self.buttons = self.button_row1 + self.button_row2 + self.button_row3
-		self.entities = [Marine(self, 128*i, 128*i) for i in range(1, 4)] + [Building(self, 512, 512)]
+		self.entities = [Marine(self, 128*i, 128*i) for i in range(1, 10)] + [Building(self, 512, 512)]
 		self.selection = None
 		self.click_x = None
 		self.click_y = None
 		self.selection_box = None
-		self.entities_selected = []
+		self.entities_selected = self.entities
 		self.camera_x = 0
-		self.camera_y = 0
+		self.camera_y = -200*64
 		self.show_grid = False
+		print "done"
 
 	def button_action(self):
 		pass
@@ -369,25 +374,12 @@ class GameState(State):
 			self.click_x = None
 			self.click_y = None
 
-	def draw(self):
-		a = time()
-		#draw world
+	def draw_world(self):
 		start = (-self.camera_x, -self.camera_y)
 		area = Rect(start, (screen.get_width(), screen.get_height()))
 		self.world.blit(self.world_image, start, area)
-		#move the camera
-		b = time()
-		if self.selection_box == None:
-			if self.mouse_x() < 25:
-				self.camera_x += 25
-			if self.mouse_x() > screen.get_width() - 25:
-				self.camera_x -= 25
-			if self.mouse_y() < 25:
-				self.camera_y += 25
-			if self.mouse_y() > screen.get_height() - 25:
-				self.camera_y -= 25
-		#show the grid
-		c = time()
+
+	def draw_grid(self):
 		if self.show_grid:
 			for x in range(screen.get_width()/64 + 1):
 				start = (64*x - self.camera_x/64*64, -self.camera_y)
@@ -397,33 +389,34 @@ class GameState(State):
 				start = (-self.camera_x, 64*y - self.camera_y/64*64)
 				end = (screen.get_width() - self.camera_x, 64*y - self.camera_y/64*64)
 				draw.line(self.world, (200, 255, 200), start, end)
-		#draw all entities
-		d = time()
+
+	def draw_entities(self):
 		for entity in self.entities:
 			entity.draw_line_to_destination(self.world)
-			if entity.rect.collidepoint(self.camera_mouse()) and entity != self.selection:
-				entity.draw_health(self.world)
-			if entity != self.selection:
+			within_x_bound = -self.camera_x - entity.rect.width <= entity.x <= -self.camera_x + screen.get_width() + entity.rect.width
+			within_y_bound = -self.camera_y -entity.rect.height <= entity.y <= -self.camera_y + screen.get_height() + entity.rect.height
+			if entity != self.selection and within_x_bound and within_y_bound:
+				if entity.rect.collidepoint(self.camera_mouse()):
+					entity.draw_health(self.world)
 				entity.draw(self.world)
-		#draw the health of all selected entities
-		e = time()
+
+	def draw_entities_health(self):
 		for entity in self.entities_selected:
 			entity.draw_health(self.world)
-		#draw selection
-		f = time()
+
+	def draw_selection(self):
 		if self.selection != None:
 			self.selection.draw(self.world)
-		screen.blit(self.world, (self.camera_x, self.camera_y))
-		#draw selection box
-		g = time()
+
+	def draw_selection_box(self):
 		if self.selection_box != None:
 			draw.rect(screen, (100, 255, 100), self.selection_box, 5)
-		#draw position for all entities on map
-		h = time()
+
+	def draw_map(self):
 		for entity in self.entities:
 			screen.set_at((int(entity.x/64), int(entity.y/64 + screen.get_height() - 256)), entity.color)
-		#draw all buttons
-		i = time()
+
+	def draw_buttons(self):
 		button_background = Rect(screen.get_width() - 256, screen.get_height() - 256, 256, 256)
 		draw.rect(screen, (0, 0, 0), button_background)
 		for button in self.buttons:
@@ -432,16 +425,42 @@ class GameState(State):
 				button.draw(lighter_color)
 			else:
 				button.draw(button.color)
-		j = time()
-		display.update()
-		k = time()
-		#print "world:", b - a, "grid:", c - b, "entities:", d - c, "health:", e - d, "camera:", f - e, "selection:", g - f, "selection box:", h - g, "map:", i - h, "buttons:", j - i, "display:", k - j
 
-	def update(self):
-		keys = key.get_pressed()
-		if keys[K_ESCAPE]:
-			exit()
-		#kill all dead entities
+	def draw(self):
+		a = time()
+		self.draw_world()
+		b = time()
+		self.draw_grid()
+		c = time()
+		self.draw_entities()
+		d = time()
+		self.draw_entities_health()
+		e = time()
+		self.draw_selection()
+		f = time()
+		screen.blit(self.world, (self.camera_x, self.camera_y))
+		self.draw_selection_box()
+		g = time()
+		self.draw_map()
+		h = time()
+		self.draw_buttons()
+		i = time()
+		display.update()
+		j = time()
+		#print "world:", b-a, "grid:", c-b, "entities:", d-c, "health:", e-d, "selection:", f-e, "selection box:", g-f, "map:", h-g, "buttons:", i-h, "update:", j-i
+
+	def update_camera(self):
+		if self.selection_box == None:
+			if self.mouse_x() < 50:
+				self.camera_x += 1
+			if self.mouse_x() > screen.get_width() - 50:
+				self.camera_x -= 1
+			if self.mouse_y() < 50:
+				self.camera_y += 1
+			if self.mouse_y() > screen.get_height() - 50:
+				self.camera_y -= 1
+
+	def kill_dead_entities(self):
 		i = 0
 		while i < len(self.entities):
 			if self.entities[i].current_health <= 0:
@@ -450,13 +469,15 @@ class GameState(State):
 				del self.entities[i]
 				continue
 			i += 1
-		#make selection follow mouse
+
+	def update_selection(self):
 		if self.selection != None:
 			if self.selection.__class__ == Marine:
 				self.selection.x, self.selection.y = self.camera_mouse()
 			elif self.selection.__class__ == Building:
 				self.selection.x, self.selection.y = self.camera_mouse_x()/64*64, self.camera_mouse_y()/64*64
-		#change what buttons do when selecting entities
+
+	def update_buttons(self):
 		if self.entities_selected != []:
 			self.button1.action = self.entities_selected[0].button1_action
 			self.button2.action = self.entities_selected[0].button2_action
@@ -470,9 +491,24 @@ class GameState(State):
 			self.buttons = self.entities_selected[0].buttons
 		else:
 			self.buttons = [self.button1]
-		#update all entities
+
+	def update_entities(self):
 		for entity in self.entities:
 			entity.update(self.entities)
+
+	def update(self):
+		a = time()
+		self.update_camera()
+		b = time()
+		self.kill_dead_entities()
+		c = time()
+		self.update_selection()
+		d = time()
+		self.update_buttons()
+		e = time()
+		self.update_entities()
+		f = time()
+		#print "camera:", b-a, "kill dead:", c-b, "selection:", d-c, "buttons:", e-d, "entities:", f-e 
 
 if __name__ == '__main__':
 	init()
