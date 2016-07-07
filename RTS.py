@@ -113,10 +113,10 @@ class State():
 			self.handle_draw()
 			d = time()
 			self.tick()	
-			with open("data.csv", "a") as csvfile:
-				writer = csv.writer(csvfile)
-				writer.writerow([c-b])
-			print "handle events:", b - a, "update:", c - b, "draw:", d - c
+			# with open("data.csv", "a") as csvfile:
+			# 	writer = csv.writer(csvfile)
+			# 	writer.writerow([c-b])
+			# print "handle events:", b - a, "update:", c - b, "draw:", d - c
 
 class Entity:
 
@@ -130,10 +130,10 @@ class Entity:
 		self.rect = Rect(self.x - self.size/2, self.y - self.size/2, self.size, self.size)
 		self.max_health = 100
 		self.current_health = 100
-		self.speed = 10
-		self.path_weight = 1
+		self.speed = 1
+		self.path_weight = 100
 		self.path_angle = None
-		self.seperation_weight = 1
+		self.seperation_weight = 1000
 		self.seperation_angle = None
 		self.alignment_weight = 1
 		self.alignment_angle = None
@@ -142,16 +142,25 @@ class Entity:
 		self.path = []
 		self.buttons = []
 		self.neighbors = []
-		self.neighbor_radius = 4
+		self.neighbor_radius = 20
 		self.setup()
 
 	def weighted_angle(self):
-		path = path_weight*path_angle
-		seperation = seperation_weight*seperation_angle
-		alignment = alignment_weight*alignment_angle
-		cohesion = cohesion_weight*cohesion_angle
-		total_weight = path_weight + seperation_weight + alignment_weight + cohesion_weight
-		return (path + seperation + alignment + cohesion)/total_weight
+		total = 0
+		total_weight = 0
+		if self.path_angle != None:
+			total += self.path_weight*self.path_angle
+			total_weight += self.path_weight
+		if self.seperation_angle != None:
+			total += self.seperation_weight*self.seperation_angle
+			total_weight += self.seperation_weight
+		if self.alignment_angle != None:
+			total += self.alignment_weight*self.alignment_angle
+			total_weight += self.alignment_weight
+		if self.cohesion_angle != None:
+			total += self.cohesion_weight*self.cohesion_angle
+			total_weight += self.cohesion_weight
+		return total/total_weight
 
 	def get_neighbors(self, radius):
 		return_lst = []
@@ -194,14 +203,19 @@ class Entity:
 		draw.rect(screen, (0, 255, 0), Rect(offset, (self.current_health, 32)))
 
 	def draw_angles(self, screen):
+		start = (self.x, self.y)
 		if self.path_angle != None:
-			draw.line(screen, (255, 255, 0), (self.x, self.y), (self.x + 50*cos(self.path_angle), self.y + 50*sin(self.path_angle)))
+			end = (self.x + 50*cos(self.path_angle), self.y + 50*sin(self.path_angle))
+			draw.line(screen, (255, 255, 0), start, end)#yellow
 		if self.seperation_angle != None:
-			draw.line(screen, (0, 255, 255), (self.x, self.y), (self.x + 50*cos(self.seperation_angle), self.y + 50*sin(self.seperation_angle)))
+			end = (self.x + 50*cos(self.seperation_angle), self.y + 50*sin(self.seperation_angle))
+			draw.line(screen, (0, 255, 255), start, end)#teal
 		if self.alignment_angle != None:
-			draw.line(screen, (255, 0, 255), (self.x, self.y), (self.x + 50*cos(self.alignment_angle), self.y + 50*sin(self.alignment_angle)))
+			end = (self.x + 50*cos(self.alignment_angle), self.y + 50*sin(self.alignment_angle))
+			draw.line(screen, (255, 0, 255), start, end)#purple
 		if self.cohesion_angle != None:
-			draw.line(screen, (255, 255, 255), (self.x, self.y), (self.x + 50*cos(self.cohesion_angle), self.y + 50*sin(self.cohesion_angle)))
+			end = (self.x + 50*cos(self.cohesion_angle), self.y + 50*sin(self.cohesion_angle))
+			draw.line(screen, (255, 255, 255), start, end)#white
 
 	def remove_self_from_entity_map(self):
 		for i in range(len(self.game.entity_map[int(self.x/64)][int(self.y/64)])):
@@ -219,9 +233,12 @@ class Entity:
 	def update_seperation_angle(self):
 		try:
 			seperation_angles = []
+			self.seperation_angle = None
 			for entity in self.neighbors:
 				try:
-					seperation_angle = 1/(sqrt((entity.x - self.x)**2 + (entity.y - self.y)**2)*cos(self.path_angle - atan2(entity.y. entity.x)))
+					magnitude = sqrt((entity.x - self.x)**2 + (entity.y - self.y)**2)
+					angle = self.path_angle - atan2(entity.y. entity.x)
+					seperation_angle = 1/(magnitude*cos(angle))
 					if seperation_angle > pi/2:
 						seperation_angle = pi/2
 					elif seperation_angle < -pi/2:
@@ -235,27 +252,31 @@ class Entity:
 
 	def update_alignment_angle(self):
 		try:
-			self.alignment_angle = sum(entity.path_angle for entity in self.neighbors)/len(self.neighbors)
+			self.alignment_angle = sum(entity.path_angle for entity in self.neighbors if entity.path_angle != None)/len(self.neighbors)
 		except:
 			self.alignment_angle = None
 
 	def update_cohesion_angle(self):
 		try:
-			cohesion_x = sum(entity.x for entity in self.neighbors)/len(self.neighbors)
-			cohesion_y = sum(entity.y for entity in self.neighbors)/len(self.neighbors)
+			cohesion_x = sum(entity.x for entity in self.neighbors if entity.path_angle != None)/len(self.neighbors)
+			cohesion_y = sum(entity.y for entity in self.neighbors if entity.path_angle != None)/len(self.neighbors)
 			self.cohesion_angle = atan2((cohesion_y - self.y), (cohesion_x - self.x))
 		except:
 			self.cohesion_angle = None
 
 	def update_location(self):
 		try:
-			self.x += cos((self.path_angle + self.seperation_angle + self.alignment_angle + self.cohesion_angle)/4)
-			self.y += sin((self.path_angle + self.seperation_angle + self.alignment_angle + self.cohesion_angle)/4)
+			self.x += self.speed*cos(self.weighted_angle())
+			self.y += self.speed*sin(self.weighted_angle())
 		except:
 			pass
 
 	def place_self_on_entity_map(self):
 		self.game.entity_map[int(self.x/64)][int(self.y/64)].append(self)
+
+	def check_stop(self):
+		if self.path != [] and sqrt((self.path[0][1] - self.y)**2 + (self.path[0][0] - self.x)**2) < self.speed:
+			del self.path[0]
 
 	def setup(self):
 		pass
@@ -272,12 +293,12 @@ class Marine(Entity):
 		self.color = (100, 100, 255)
 		self.max_health = 64
 		self.current_health = 64
-		self.speed = 10
+		self.speed = 1
 
 	def draw(self, screen):
 		draw.circle(screen, self.color, (int(self.x), int(self.y)), self.rect.width/2)
 		try:
-			direction = (self.path_angle + self.seperation_angle + self.alignment_angle + self.cohesion_angle)/4
+			direction = self.weighted_angle()
 			right_x = self.x + self.size*cos(direction - pi/3)/2
 			right_y = self.y + self.size*sin(direction - pi/3)/2
 			forward_x = self.x + sqrt(3)*self.size*cos(direction)/2
@@ -299,6 +320,7 @@ class Marine(Entity):
 		self.update_cohesion_angle()
 		#print self.path_angle, self.seperation_angle, self.alignment_angle, self.cohesion_angle
 		self.update_location()
+		self.check_stop()
 		self.mark_available()
 		self.place_self_on_entity_map()
 
@@ -324,7 +346,7 @@ class GameState(State):
 		self.world_image = self.generate_world_image(self.world_width, self.world_height, self.tile_length)
 		self.world.blit(self.world_image, (0, 0))
 		self.buttons = []
-		self.entities = [Marine(self, 128*i, 128*i) for i in range(1, 50)]
+		self.entities = [Marine(self, 128*i, 128*i) for i in range(1, 99)]
 		self.selection = None
 		self.click_x = None
 		self.click_y = None
@@ -493,7 +515,7 @@ class GameState(State):
 		self.draw_world_available()
 		self.draw_grid()
 		self.draw_entities()
-		#self.draw_entities_health()
+		self.draw_entities_health()
 		self.draw_selection()
 		screen.blit(self.world, (self.camera_x, self.camera_y))
 		self.draw_selection_box()
@@ -540,7 +562,7 @@ class GameState(State):
 			entity.update(self.entities)
 
 	def update(self):
-		self.update_camera()
+		#self.update_camera()
 		self.kill_dead_entities()
 		self.update_selection()
 		self.update_buttons()
