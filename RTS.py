@@ -1,14 +1,22 @@
+from Entity import *
+from Tiles import *
 from pygame import *
 from pygame.locals import *
 from sys import *
-from time import *
 from math import *
 from random import *
-import csv
+from time import *
+from csv import *
 
 def change_state(delete, create):
 	del delete
 	new = create()
+
+def timer(function):
+		start = time()
+		function()
+		end = time()
+		print function.__name__, ":", end - start
 
 class State():
 
@@ -59,7 +67,7 @@ class State():
 	def draw(self):
 		display.update()
 
-	def tick(self, fps = 60):
+	def tick(self, fps = 30):
 		interval = 1./fps
 		delta = time() - self.last_time
 		if delta < interval:
@@ -114,215 +122,9 @@ class State():
 			d = time()
 			self.tick()	
 			# with open("data.csv", "a") as csvfile:
-			# 	writer = csv.writer(csvfile)
+			# 	writer = writer(csvfile)
 			# 	writer.writerow([c-b])
-			# print "handle events:", b - a, "update:", c - b, "draw:", d - c
-
-class Entity:
-
-	def __init__(self, game, x, y):
-		self.game = game
-		self.x = x
-		self.y = y
-		self.game.entity_map[int(x/64)][int(y/64)].append(self)
-		self.color = (0, 0, 0)
-		self.size = 32
-		self.rect = Rect(self.x - self.size/2, self.y - self.size/2, self.size, self.size)
-		self.max_health = 100
-		self.current_health = 100
-		self.speed = 1
-		self.path_weight = 100
-		self.path_angle = None
-		self.seperation_weight = 1000
-		self.seperation_angle = None
-		self.alignment_weight = 1
-		self.alignment_angle = None
-		self.cohesion_weight = 1
-		self.cohesion_angle = None
-		self.path = []
-		self.buttons = []
-		self.neighbors = []
-		self.neighbor_radius = 20
-		self.setup()
-
-	def weighted_angle(self):
-		total = 0
-		total_weight = 0
-		if self.path_angle != None:
-			total += self.path_weight*self.path_angle
-			total_weight += self.path_weight
-		if self.seperation_angle != None:
-			total += self.seperation_weight*self.seperation_angle
-			total_weight += self.seperation_weight
-		if self.alignment_angle != None:
-			total += self.alignment_weight*self.alignment_angle
-			total_weight += self.alignment_weight
-		if self.cohesion_angle != None:
-			total += self.cohesion_weight*self.cohesion_angle
-			total_weight += self.cohesion_weight
-		return total/total_weight
-
-	def get_neighbors(self, radius):
-		return_lst = []
-		for i in range(max(0, int(self.x/64 - radius)), min(self.game.world_width, int(self.x/64 + radius))):
-			for j in range(max(0, int(self.y/64 - radius)), min(self.game.world_height, int(self.y/64 + radius))):
-				entities = self.game.entity_map[i][j]
-				for entity in entities:
-					if entity != self and sqrt((self.x - entity.x)**2 + (self.y - entity.y)**2) < radius*64:
-						return_lst.append(entity)
-		return return_lst
-
-	def mark_unavailable(self):
-		world_x = int(self.x/self.game.tile_length)
-		world_y = int(self.y/self.game.tile_length)
-		for x in range(world_x, world_x + self.rect.width/self.game.tile_length + 1):
-			for y in range(world_y, world_y + self.rect.height/self.game.tile_length + 1):
-				self.game.world_available[x][y] = True
-
-	def mark_available(self):
-		world_x = int(self.x/self.game.tile_length)
-		world_y = int(self.y/self.game.tile_length)
-		for x in range(world_x, world_x + self.rect.width/self.game.tile_length + 1):
-			for y in range(world_y, world_y + self.rect.height/self.game.tile_length + 1):
-				self.game.world_available[x][y] = False
-
-	def pathfind(self, destination):
-		self.path.append(destination)
-
-	def draw_line_to_destination(self, screen):
-		if len(self.path) > 2:
-			for i in range(len(self.path)):
-				if i == 0:
-					draw.line(screen, (100, 255, 100), (self.x, self.y), self.path[0])
-				else:
-					draw.line(screen, (100, 255, 100), self.path[i], self.path[i - 1])
-
-	def draw_health(self, screen):
-		offset = (self.x - self.size/2 - (self.max_health - self.rect.width)/2, self.y - self.size/2 - 64)
-		draw.rect(screen, (0, 0, 0), Rect(offset, (self.max_health, 32)))
-		draw.rect(screen, (0, 255, 0), Rect(offset, (self.current_health, 32)))
-
-	def draw_angles(self, screen):
-		start = (self.x, self.y)
-		if self.path_angle != None:
-			end = (self.x + 50*cos(self.path_angle), self.y + 50*sin(self.path_angle))
-			draw.line(screen, (255, 255, 0), start, end)#yellow
-		if self.seperation_angle != None:
-			end = (self.x + 50*cos(self.seperation_angle), self.y + 50*sin(self.seperation_angle))
-			draw.line(screen, (0, 255, 255), start, end)#teal
-		if self.alignment_angle != None:
-			end = (self.x + 50*cos(self.alignment_angle), self.y + 50*sin(self.alignment_angle))
-			draw.line(screen, (255, 0, 255), start, end)#purple
-		if self.cohesion_angle != None:
-			end = (self.x + 50*cos(self.cohesion_angle), self.y + 50*sin(self.cohesion_angle))
-			draw.line(screen, (255, 255, 255), start, end)#white
-
-	def remove_self_from_entity_map(self):
-		for i in range(len(self.game.entity_map[int(self.x/64)][int(self.y/64)])):
-			if self.game.entity_map[int(self.x/64)][int(self.y/64)][i] == self:
-				del self.game.entity_map[int(self.x/64)][int(self.y/64)][i]
-				break
-
-	def update_path_angle(self):
-		try:
-			self.path_angle = atan2((self.path[0][1] - self.y), (self.path[0][0] - self.x))
-		except:
-			self.path_angle = None
-
-
-	def update_seperation_angle(self):
-		try:
-			seperation_angles = []
-			self.seperation_angle = None
-			for entity in self.neighbors:
-				try:
-					magnitude = sqrt((entity.x - self.x)**2 + (entity.y - self.y)**2)
-					angle = self.path_angle - atan2(entity.y. entity.x)
-					seperation_angle = 1/(magnitude*cos(angle))
-					if seperation_angle > pi/2:
-						seperation_angle = pi/2
-					elif seperation_angle < -pi/2:
-						seperation_angle = -pi/2
-					seperation_angles.append((self.seperation_angle + path_angle)%(2*pi))
-				except:
-					seperation_angles.append((pi/2 + self.path_angle)%(2*pi))
-				self.seperation_angle = sum(seperation_angles)/len(seperation_angles)
-		except:
-			self.seperation_angle = None
-
-	def update_alignment_angle(self):
-		try:
-			self.alignment_angle = sum(entity.path_angle for entity in self.neighbors if entity.path_angle != None)/len(self.neighbors)
-		except:
-			self.alignment_angle = None
-
-	def update_cohesion_angle(self):
-		try:
-			cohesion_x = sum(entity.x for entity in self.neighbors if entity.path_angle != None)/len(self.neighbors)
-			cohesion_y = sum(entity.y for entity in self.neighbors if entity.path_angle != None)/len(self.neighbors)
-			self.cohesion_angle = atan2((cohesion_y - self.y), (cohesion_x - self.x))
-		except:
-			self.cohesion_angle = None
-
-	def update_location(self):
-		try:
-			self.x += self.speed*cos(self.weighted_angle())
-			self.y += self.speed*sin(self.weighted_angle())
-		except:
-			pass
-
-	def place_self_on_entity_map(self):
-		self.game.entity_map[int(self.x/64)][int(self.y/64)].append(self)
-
-	def check_stop(self):
-		if self.path != [] and sqrt((self.path[0][1] - self.y)**2 + (self.path[0][0] - self.x)**2) < self.speed:
-			del self.path[0]
-
-	def setup(self):
-		pass
-
-	def draw(self, screen, camera_pos):
-		pass
-
-	def update(self, entities):
-		pass
-
-class Marine(Entity):
-
-	def setup(self):
-		self.color = (100, 100, 255)
-		self.max_health = 64
-		self.current_health = 64
-		self.speed = 1
-
-	def draw(self, screen):
-		draw.circle(screen, self.color, (int(self.x), int(self.y)), self.rect.width/2)
-		try:
-			direction = self.weighted_angle()
-			right_x = self.x + self.size*cos(direction - pi/3)/2
-			right_y = self.y + self.size*sin(direction - pi/3)/2
-			forward_x = self.x + sqrt(3)*self.size*cos(direction)/2
-			forward_y = self.y + sqrt(3)*self.size*sin(direction)/2
-			left_x  = self.x + self.size*cos(direction + pi/3)/2
-			left_y = self.y + self.size*sin(direction + pi/3)/2
-			draw.polygon(screen, self.color, [(right_x, right_y), (forward_x, forward_y), (left_x, left_y)])
-		except:
-			pass
-
-	def update(self, entities):
-		self.mark_unavailable()
-		self.remove_self_from_entity_map()
-		self.rect = Rect(self.x - self.size/2, self.y - self.size/2, self.size, self.size)
-		self.neighbors = self.get_neighbors(self.neighbor_radius)
-		self.update_path_angle()
-		self.update_seperation_angle()
-		self.update_alignment_angle()
-		self.update_cohesion_angle()
-		#print self.path_angle, self.seperation_angle, self.alignment_angle, self.cohesion_angle
-		self.update_location()
-		self.check_stop()
-		self.mark_available()
-		self.place_self_on_entity_map()
+			#print "handle events:", b - a, "update:", c - b, "draw:", d - c
 
 class Button:
 
@@ -333,33 +135,29 @@ class Button:
 
 	def draw(self, color):
 		draw.rect(screen, color, self.rect)
-
+ 
 class GameState(State):
 
 	def setup(self):
+		self.camera_x = 0
+		self.camera_y = 0
 		self.world_width = 200
 		self.world_height = 200
 		self.tile_length = 64
 		self.world = Surface((self.world_width*self.tile_length, self.world_height*self.tile_length))
-		self.world_available = [[True for x in range(self.world_height)] for y in range(self.world_width)]
-		self.entity_map = [[[] for x in range(self.world_height)] for y in range(self.world_width)]
-		self.world_image = self.generate_world_image(self.world_width, self.world_height, self.tile_length)
-		self.world.blit(self.world_image, (0, 0))
+		self.tiles = [[Tile(x, y, self) for x in range(self.world_height)] for y in range(self.world_width)]
+		self.draw_world()
 		self.buttons = []
-		self.entities = [Marine(self, 128*i, 128*i) for i in range(1, 99)]
+		self.entities = [Entity(self, 128*i, 128*i) for i in range(1, 2)]
 		self.selection = None
 		self.click_x = None
 		self.click_y = None
 		self.selection_box = None
 		self.entities_selected = self.entities
-		self.camera_x = 0
-		self.camera_y = 0
-		self.show_grid = False
-		self.show_world_available = False
+		self.show_grid = True
+		self.show_world_available = True
+		self.move_camera = True
 		self.font = font.Font(None, 24)
-
-	def show_grid(self):
-		self.show_grid = not self.show_grid
 
 	def mouse_x(self):
 		return mouse.get_pos()[0]
@@ -375,16 +173,6 @@ class GameState(State):
 
 	def camera_mouse_y(self):
 		return self.mouse_y() - self.camera_y
-
-	def generate_world_image(self, width, height, length):
-		surface = Surface((width*length, height*length))
-		rect = Rect(0, 0, length, length)
-		for x in range(width):
-			for y in range(height):
-				rect.topleft = x*length, y*length
-				color = (randrange(232, 242), randrange(196, 206), randrange(170, 180))
-				draw.rect(surface, color, rect)
-		return surface
 
 	def click_began(self):
 		flag = True
@@ -412,7 +200,9 @@ class GameState(State):
 			keys = key.get_pressed()
 			if not (keys[K_LSHIFT] or entity.path == []):
 				entity.path = []
-			entity.pathfind(self.camera_mouse())
+			start = self.tiles[int(entity.x/self.tile_length)][int(entity.y/self.tile_length)]
+			end = self.tiles[self.camera_mouse_x()/self.tile_length][self.camera_mouse_y()/self.tile_length]
+			entity.pathfind(start, end)
 
 	def mouse_moved(self):
 		#update size of rectangle select
@@ -440,41 +230,38 @@ class GameState(State):
 			self.click_y = None
 
 	def draw_world(self):
-		start = (-self.camera_x, -self.camera_y)
-		area = Rect(start, (screen.get_width(), screen.get_height()))
-		self.world.blit(self.world_image, start, area)
+		length = self.tile_length
+		for x in range(screen.get_width()/length + 1):
+			for y in range(screen.get_height()/length + 1):
+				rect = Rect(length*(x - self.camera_x/length), length*(y - self.camera_y/length), length, length)
+				draw.rect(self.world, self.tiles[x - self.camera_x/length][y - self.camera_y/length].color, rect)
 
-	def draw_world_available(self):
+	def draw_tile_available(self):
 		if self.show_world_available:
-			for x in range(screen.get_width()/64 + 1):
-				for y in range(screen.get_height()/64 + 1):
-					if self.world_available[x - self.camera_x/64][y - self.camera_y/64] == False:
-						rect = Rect(64*(x - self.camera_x/64), 64*(y - self.camera_y/64), 64, 64)
-						draw.rect(self.world, (255, 100, 100), rect)
-
-	def draw_entity_map(self):
-		if self.show_world_available:
-			for x in range(screen.get_width()/64 + 1):
-				for y in range(screen.get_height()/64 + 1):
-					if self.entity_map[x - self.camera_x/64][y - self.camera_y/64] != []:
-						rect = Rect(64*(x - self.camera_x/64), 64*(y - self.camera_y/64), 64, 64)
+			length = self.tile_length
+			for x in range(screen.get_width()/length + 1):
+				for y in range(screen.get_height()/length + 1):
+					if self.tiles[x - self.camera_x/length][y - self.camera_y/length].availability == False:
+						rect = Rect(length*(x - self.camera_x/length), length*(y - self.camera_y/length), length, length)
 						draw.rect(self.world, (255, 100, 100), rect)
 
 	def draw_grid(self):
 		if self.show_grid:
-			for x in range(screen.get_width()/64 + 1):
-				start = (64*x - self.camera_x/64*64, -self.camera_y)
-				end = (64*x - self.camera_x/64*64, screen.get_height() - self.camera_y)
+			length = self.tile_length
+			for x in range(screen.get_width()/length + 1):
+				start = (length*x - self.camera_x/length*length, -self.camera_y)
+				end = (length*x - self.camera_x/length*length, screen.get_height() - self.camera_y)
 				draw.line(self.world, (200, 255, 200), start, end)
-			for y in range(screen.get_height()/64 + 1):
-				start = (-self.camera_x, 64*y - self.camera_y/64*64)
-				end = (screen.get_width() - self.camera_x, 64*y - self.camera_y/64*64)
+			for y in range(screen.get_height()/length + 1):
+				start = (-self.camera_x, length*y - self.camera_y/length*length)
+				end = (screen.get_width() - self.camera_x, length*y - self.camera_y/length*length)
 				draw.line(self.world, (200, 255, 200), start, end)
 
 	def draw_entities(self):
 		for entity in self.entities:
-			entity.draw_line_to_destination(self.world)
+			#entity.draw_line_to_destination(self.world)
 			entity.draw_angles(self.world)
+			entity.draw_path(self.world)
 			left = -self.camera_x - entity.rect.width
 			right = -self.camera_x + screen.get_width() + entity.rect.width
 			top = -self.camera_y -entity.rect.height
@@ -510,9 +297,16 @@ class GameState(State):
 			else:
 				button.draw(button.color)
 
+	def draw_neighbors(self):
+		tile = self.tiles[self.camera_mouse_x()/self.tile_length][self.camera_mouse_y()/self.tile_length]
+		for neighbor in tile.get_neighbors():
+			rect = Rect(neighbor.x*self.tile_length, neighbor.y*self.tile_length, self.tile_length, self.tile_length)
+			draw.rect(self.world, (0, 0, 0), rect)
+
 	def draw(self):
 		self.draw_world()
-		self.draw_world_available()
+		#self.draw_tile_available()
+		#self.draw_neighbors()
 		self.draw_grid()
 		self.draw_entities()
 		self.draw_entities_health()
@@ -524,7 +318,7 @@ class GameState(State):
 		display.update()
 
 	def update_camera(self):
-		if self.selection_box == None:
+		if self.move_camera:
 			if self.mouse_x() < 50:
 				self.camera_x += 5
 			if self.mouse_x() > screen.get_width() - 50:
@@ -562,7 +356,7 @@ class GameState(State):
 			entity.update(self.entities)
 
 	def update(self):
-		#self.update_camera()
+		self.update_camera()
 		self.kill_dead_entities()
 		self.update_selection()
 		self.update_buttons()
@@ -570,5 +364,5 @@ class GameState(State):
 
 if __name__ == '__main__':
 	init()
-	screen = display.set_mode((3*1366/4, 3*768/4))
+	screen = display.set_mode((1920/2, 1080/2))
 	new_game = GameState()
