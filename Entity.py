@@ -8,7 +8,7 @@ class Entity:
 	def __init__(self, tiles, x, y):
 		self.x = x
 		self.y = y
-		tiles[int(x/64)][int(y/64)].entities.append(self)
+		tiles[x/64][y/64].entities.append(self)
 		self.color = (randrange(255), randrange(255), randrange(255))
 		self.size = 32
 		self.rect = Rect(self.x - self.size/2, self.y - self.size/2, self.size, self.size)
@@ -55,8 +55,8 @@ class Entity:
 
 	def get_neighbors(self, radius, world_width, world_height, tiles):
 		return_lst = []
-		for i in range(max(0, int(self.x/64 - radius)), min(world_width, int(self.x/64 + radius))):
-			for j in range(max(0, int(self.y/64 - radius)), min(world_height, int(self.y/64 + radius))):
+		for i in range(max(0, self.x/64 - radius), min(world_width, self.x/64 + radius)):
+			for j in range(max(0, self.y/64 - radius), min(world_height, self.y/64 + radius)):
 				entities = tiles[i][j].entities
 				for entity in entities:
 					if entity != self and sqrt((self.x - entity.x)**2 + (self.y - entity.y)**2) < radius*64:
@@ -127,7 +127,7 @@ class Entity:
 			draw.rect(screen, self.color, rect)
 
 	def draw(self, screen):
-		draw.circle(screen, self.color, (int(self.x), int(self.y)), self.size/2)
+		draw.circle(screen, self.color, (self.x, self.y), self.size/2)
 		try:
 			direction = self.weighted_angle()
 			right_x = self.x + self.size*cos(direction - pi/3)/2
@@ -190,14 +190,14 @@ class Entity:
 			del self.path[0]
 		else:
 			try:
-				self.x += self.speed*cos(self.weighted_angle())
-				self.y += self.speed*sin(self.weighted_angle())
+				self.x += int(self.speed*cos(self.weighted_angle()))
+				self.y += int(self.speed*sin(self.weighted_angle()))
 			except:
 				pass
 
 	def update_tiles(self, x, y, length, tiles):
-		this_x = int((x - self.size/2)/length)
-		this_y = int((y - self.size/2)/length)
+		this_x = (x - self.size/2)/length
+		this_y = (y - self.size/2)/length
 		for i in range(this_x, this_x + self.rect.width/length + 1):
 			for j in range(this_y, this_y + self.rect.height/length + 1):
 				tiles[i][j].availability = True
@@ -205,8 +205,8 @@ class Entity:
 			if tiles[this_x][this_y].entities[i] == self:
 				del tiles[this_x][this_y].entities[i]
 				break
-		world_x = int((self.x - self.size/2)/length)
-		world_y = int((self.y - self.size/2)/length)
+		world_x = (self.x - self.size/2)/length
+		world_y = (self.y - self.size/2)/length
 		for x in range(world_x, world_x + self.rect.width/length + 1):
 			for y in range(world_y, world_y + self.rect.height/length + 1):
 				tiles[x][y].availability = False

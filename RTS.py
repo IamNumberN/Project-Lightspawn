@@ -84,7 +84,7 @@ class GameState(State):
 			keys = key.get_pressed()
 			if not (keys[K_LSHIFT] or entity.path == []):
 				entity.path = []
-			start = self.tiles[int(entity.x/self.tile_length)][int(entity.y/self.tile_length)]
+			start = self.tiles[entity.x/self.tile_length][entity.y/self.tile_length]
 			end = self.tiles[self.camera_mouse_x()/self.tile_length][self.camera_mouse_y()/self.tile_length]
 			entity.pathfind(start, end, self.world_height, self.world_width, self.tiles)
 
@@ -169,7 +169,7 @@ class GameState(State):
 
 	def draw_map(self):
 		for entity in self.entities:
-			screen.set_at((int(entity.x/64), int(entity.y/64 + screen.get_height() - 256)), entity.color)
+			screen.set_at((entity.x/64, entity.y/64 + screen.get_height() - 256), entity.color)
 
 	def draw_buttons(self):
 		button_background = Rect(screen.get_width() - 256, screen.get_height() - 256, 256, 256)
