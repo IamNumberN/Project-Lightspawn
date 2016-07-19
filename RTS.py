@@ -14,9 +14,9 @@ def change_state(delete, create):
 	del delete
 	new = create()
 
-def timer(function):
+def timer(function, *args):
 		start = time()
-		function()
+		function(*args)
 		end = time()
 		print function.__name__, ":", end - start
  
@@ -29,19 +29,18 @@ class GameState(State):
 		self.world_height = 200
 		self.tile_length = 64
 		self.world = Surface((self.world_width*self.tile_length, self.world_height*self.tile_length))
-		self.tiles = [[Tile(x, y) for x in range(self.world_height)] for y in range(self.world_width)]
+		self.tiles = [[Tile(x, y) for y in range(self.world_height)] for x in range(self.world_width)]
 		self.draw_world()
 		self.buttons = []
-		self.entities = [Entity(self.tiles, 128*i, 128*i) for i in range(1, 2)]
+		self.entities = [Entity(self.tiles, 128*i, 128*i) for i in range(1, 3)]
 		self.selection = None
 		self.click_x = None
 		self.click_y = None
 		self.selection_box = None
-		self.entities_selected = self.entities
+		self.entities_selected = [self.entities[0]]
 		self.show_grid = True
 		self.show_world_available = True
 		self.move_camera = True
-		self.font = font.Font(None, 24)
 
 	def mouse_x(self):
 		return mouse.get_pos()[0]
@@ -86,7 +85,7 @@ class GameState(State):
 				entity.path = []
 			start = self.tiles[entity.x/self.tile_length][entity.y/self.tile_length]
 			end = self.tiles[self.camera_mouse_x()/self.tile_length][self.camera_mouse_y()/self.tile_length]
-			entity.pathfind(start, end, self.world_height, self.world_width, self.tiles)
+			timer(entity.pathfind, start, end, self.world_height, self.world_width, self.tiles)
 
 	def mouse_moved(self):
 		#update size of rectangle select
@@ -102,11 +101,11 @@ class GameState(State):
 				self.selection_box.bottomleft = (self.click_x, self.click_y)
 			elif width > 0 and height > 0:
 				self.selection_box.topleft = (self.click_x, self.click_y)
-			rect = self.selection_box.move(-self.camera_x, -self.camera_y)
+			rect = self.selection_box.move(-self.camera_x, - self.camera_y)
 			self.entities_selected = [self.entities[i] for i in rect.collidelistall(self.entities)]
 
 	def click_ended(self):
-		#select all in rectangle select and the delete rectangle
+		#select all in rectangle select and then delete rectangle
 		if (self.click_x, self.click_y) != (None, None):
 			if self.selection_box != None:
 				self.selection_box = None
@@ -115,10 +114,11 @@ class GameState(State):
 
 	def draw_world(self):
 		length = self.tile_length
-		for x in range(screen.get_width()/length + 1):
-			for y in range(screen.get_height()/length + 1):
-				rect = Rect(length*(x - self.camera_x/length), length*(y - self.camera_y/length), length, length)
-				draw.rect(self.world, self.tiles[x - self.camera_x/length][y - self.camera_y/length].color, rect)
+		for x in range(screen.get_width()/length + 2):
+			for y in range(screen.get_height()/length + 2):
+				self.tiles[x- self.camera_x/length - 1][y- self.camera_y/length - 1].draw(self.world, self.tile_length)
+				# rect = Rect(length*(x - self.camera_x/length), length*(y - self.camera_y/length), length, length)
+				# draw.rect(self.world, self.tiles[x - self.camera_x/length][y - self.camera_y/length].color, rect)
 
 	def draw_tile_available(self):
 		if self.show_world_available:
@@ -145,7 +145,7 @@ class GameState(State):
 		for entity in self.entities:
 			#entity.draw_line_to_destination(self.world)
 			entity.draw_angles(self.world)
-			entity.draw_path(self.world, self.tile_length, self.camera_x, self.camera_y)
+			entity.draw_path(self.world, self.tile_length)
 			left = -self.camera_x - entity.rect.width
 			right = -self.camera_x + screen.get_width() + entity.rect.width
 			top = -self.camera_y -entity.rect.height
@@ -189,7 +189,7 @@ class GameState(State):
 
 	def draw(self):
 		self.draw_world()
-		#self.draw_tile_available()
+		self.draw_tile_available()
 		#self.draw_neighbors()
 		self.draw_grid()
 		self.draw_entities()

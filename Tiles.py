@@ -22,7 +22,7 @@ class Tile:
 			return_list.append(tiles[self.x + 1][self.y])
 		return return_list
 
-	def draw(self, screen, color, length):
+	def draw(self, screen, length):
 		rect = Rect(self.x*length, self.y*length, length, length)
-		draw.rect(screen, color, rect)
+		draw.rect(screen, self.color, rect)
 

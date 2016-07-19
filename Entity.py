@@ -1,7 +1,7 @@
 from pygame import *
 from math import *
-from Queue import *
 from random import *
+from time import *
 
 class Entity:
 
@@ -67,25 +67,32 @@ class Entity:
 		return sqrt((goal.x - next.x)**2 + (goal.y - next.y)**2)
 
 	def pathfind(self, start, goal, world_height, world_width, tiles):
-		frontier = PriorityQueue()
-		frontier.put(start, 0)
+		frontier = []
+		frontier.append((start, 0))
 		came_from = {}
 		cost_so_far = {}
 		came_from[start] = None
 		cost_so_far[start] = 0
-		while not frontier.empty():
-			current = frontier.get()
+		while frontier != []:
+			current = frontier[0][0]
+			frontier.pop(0)
 			if current == goal:
 				self.path = [current]
 				while came_from[current] != None:
 					current = came_from[current]
 					self.path.append(current)
+				break
 			for neighbor in current.get_neighbors(world_height, world_width, tiles):
-				new_cost = cost_so_far[current] + 1
-				if neighbor not in cost_so_far or new_cost < cost_so_far[neighbor]:
+				if (neighbor not in cost_so_far or new_cost < cost_so_far[neighbor]) and neighbor.availability:
+					new_cost = cost_so_far[current] + len(neighbor.entities)
 					cost_so_far[neighbor] = new_cost
 					priority = new_cost + self.heuristic(goal, neighbor)
-					frontier.put(neighbor, priority)
+					for i in range(len(frontier)):
+						if priority < frontier[i][1]:
+							frontier.insert(i, (neighbor, priority))
+							came_from[neighbor] = current
+							break
+					frontier.insert(len(frontier), (neighbor, priority))
 					came_from[neighbor] = current
 
 	def setup(self):
@@ -121,10 +128,9 @@ class Entity:
 			end = (self.x + 50*cos(self.cohesion_angle), self.y + 50*sin(self.cohesion_angle))
 			draw.line(screen, (255, 255, 255), start, end)#white
 
-	def draw_path(self, screen, length, camera_x, camera_y):
+	def draw_path(self, screen, length):
 		for tile in self.path:
-			rect = Rect(length*(tile.x - camera_x/length), length*(tile.y - camera_y/length), length, length)
-			draw.rect(screen, self.color, rect)
+			tile.draw(screen, length)
 
 	def draw(self, screen):
 		draw.circle(screen, self.color, (self.x, self.y), self.size/2)
