@@ -89,6 +89,9 @@ class State():
 					self.minimize()
 				if evnt.state == 2 and evnt.gain == 1:
 					self.maximize()
+			if evnt.type == KEYDOWN:
+				if evnt.key == K_ESCAPE:
+					self.stop()
 
 	def handle_draw(self, screen):
 		screen.fill((0, 0, 0))

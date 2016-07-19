@@ -19,124 +19,6 @@ def timer(function):
 		function()
 		end = time()
 		print function.__name__, ":", end - start
-
-# class State():
-
-# 	def __init__(self):
-# 		self.last_right_click = mouse.get_pressed()[0]
-# 		self.last_pos = mouse.get_pos()
-# 		self.last_time = time()
-# 		self.minimized = False
-# 		self.count = 0
-# 		self.setup()
-# 		self.handle_update()
-
-# 	def setup(self):
-# 		pass
-
-# 	def click_began(self):
-# 		pass
-
-# 	def right_click_began(self):
-# 		pass
-
-# 	def mouse_moved(self):
-# 		pass
-
-# 	def click_ended(self):
-# 		pass
-
-# 	def right_click_ended(self):
-# 		pass
-
-# 	def minimize(self):
-# 		self.minimized = True
-# 		while self.minimized:
-# 			self.handle_events()
-
-# 	def maximize(self):
-# 		self.minimized = False
-
-# 	def update(self):
-# 		pass
-
-# 	def stop(self):
-# 		exit()
-
-# 	def resize(self):
-# 		pass
-
-# 	def draw(self):
-# 		display.update()
-
-# 	def tick(self, fps = 30):
-# 		interval = 1./fps
-# 		delta = time() - self.last_time
-# 		if delta < interval:
-# 			sleep(interval - delta)
-# 		else:
-# 			self.count += 1
-# 			#print "lagging", self.count
-# 		self.last_time = time()
-
-# 	def present_other_scene(self, other_scene):
-# 		self.other_scene = other_scene()
-
-# 	def dismiss_other_scene(self):
-# 		del self
-
-# 	def handle_events(self):
-# 		for evnt in event.get():
-# 			if evnt.type == QUIT:
-# 				self.stop()
-# 			if evnt.type == VIDEORESIZE:
-# 				self.resize()
-# 			if evnt.type == MOUSEBUTTONDOWN:
-# 				if evnt.button == 1:
-# 					self.click_began()
-# 				if evnt.button == 3:
-# 					self.right_click_began()
-# 			if evnt.type == MOUSEBUTTONUP:
-# 				if evnt.button == 1:
-# 					self.click_ended()
-# 				if evnt.button == 3:
-# 					self.right_click_ended()
-# 			if evnt.type == MOUSEMOTION:
-# 				self.mouse_moved()
-# 			if evnt.type == ACTIVEEVENT:
-# 				if evnt.state == 2 and evnt.gain == 0:
-# 					self.minimize()
-# 				if evnt.state == 2 and evnt.gain == 1:
-# 					self.maximize()
-
-# 	def handle_draw(self):
-# 		screen.fill((0, 0, 0))
-# 		self.draw()
-
-# 	def handle_update(self):
-# 		while True:
-# 			a = time()
-# 			self.handle_events()
-# 			b = time()
-# 			self.update()
-# 			c = time()
-# 			self.handle_draw()
-# 			d = time()
-# 			self.tick()	
-# 			# with open("data.csv", "a") as csvfile:
-# 			# 	writer = writer(csvfile)
-# 			# 	writer.writerow([c-b])
-# 			#print "handle events:", b - a, "update:", c - b, "draw:", d - c
-
-# class Button:
-
-# 	def __init__(self, action, x, y):
-# 		self.action = action
-# 		self.rect = Rect(x, y, 64, 64)
-# 		self.color = (200, 200, 200)
-
-# 	def draw(self, color):
-# 		draw.rect(screen, color, self.rect)
  
 class GameState(State):
 
@@ -147,10 +29,10 @@ class GameState(State):
 		self.world_height = 200
 		self.tile_length = 64
 		self.world = Surface((self.world_width*self.tile_length, self.world_height*self.tile_length))
-		self.tiles = [[Tile(x, y, self) for x in range(self.world_height)] for y in range(self.world_width)]
+		self.tiles = [[Tile(x, y) for x in range(self.world_height)] for y in range(self.world_width)]
 		self.draw_world()
 		self.buttons = []
-		self.entities = [Entity(self, 128*i, 128*i) for i in range(1, 2)]
+		self.entities = [Entity(self.tiles, 128*i, 128*i) for i in range(1, 2)]
 		self.selection = None
 		self.click_x = None
 		self.click_y = None
@@ -204,7 +86,7 @@ class GameState(State):
 				entity.path = []
 			start = self.tiles[int(entity.x/self.tile_length)][int(entity.y/self.tile_length)]
 			end = self.tiles[self.camera_mouse_x()/self.tile_length][self.camera_mouse_y()/self.tile_length]
-			entity.pathfind(start, end)
+			entity.pathfind(start, end, self.world_height, self.world_width, self.tiles)
 
 	def mouse_moved(self):
 		#update size of rectangle select
@@ -263,7 +145,7 @@ class GameState(State):
 		for entity in self.entities:
 			#entity.draw_line_to_destination(self.world)
 			entity.draw_angles(self.world)
-			entity.draw_path(self.world)
+			entity.draw_path(self.world, self.tile_length, self.camera_x, self.camera_y)
 			left = -self.camera_x - entity.rect.width
 			right = -self.camera_x + screen.get_width() + entity.rect.width
 			top = -self.camera_y -entity.rect.height
@@ -355,7 +237,7 @@ class GameState(State):
 
 	def update_entities(self):
 		for entity in self.entities:
-			entity.update(self.entities)
+			entity.update(self.entities, self.tile_length, self.world_width, self.world_height, self.tiles)
 
 	def update(self):
 		self.update_camera()

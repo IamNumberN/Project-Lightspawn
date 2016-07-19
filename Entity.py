@@ -5,11 +5,10 @@ from random import *
 
 class Entity:
 
-	def __init__(self, game, x, y):
-		self.game = game
+	def __init__(self, tiles, x, y):
 		self.x = x
 		self.y = y
-		self.game.tiles[int(x/64)][int(y/64)].entities.append(self)
+		tiles[int(x/64)][int(y/64)].entities.append(self)
 		self.color = (randrange(255), randrange(255), randrange(255))
 		self.size = 32
 		self.rect = Rect(self.x - self.size/2, self.y - self.size/2, self.size, self.size)
@@ -54,11 +53,11 @@ class Entity:
 		if total_weight != 0:
 			return total/total_weight
 
-	def get_neighbors(self, radius):
+	def get_neighbors(self, radius, world_width, world_height, tiles):
 		return_lst = []
-		for i in range(max(0, int(self.x/64 - radius)), min(self.game.world_width, int(self.x/64 + radius))):
-			for j in range(max(0, int(self.y/64 - radius)), min(self.game.world_height, int(self.y/64 + radius))):
-				entities = self.game.tiles[i][j].entities
+		for i in range(max(0, int(self.x/64 - radius)), min(world_width, int(self.x/64 + radius))):
+			for j in range(max(0, int(self.y/64 - radius)), min(world_height, int(self.y/64 + radius))):
+				entities = tiles[i][j].entities
 				for entity in entities:
 					if entity != self and sqrt((self.x - entity.x)**2 + (self.y - entity.y)**2) < radius*64:
 						return_lst.append(entity)
@@ -67,7 +66,7 @@ class Entity:
 	def heuristic(self, goal, next):
 		return sqrt((goal.x - next.x)**2 + (goal.y - next.y)**2)
 
-	def pathfind(self, start, goal):
+	def pathfind(self, start, goal, world_height, world_width, tiles):
 		frontier = PriorityQueue()
 		frontier.put(start, 0)
 		came_from = {}
@@ -77,16 +76,11 @@ class Entity:
 		while not frontier.empty():
 			current = frontier.get()
 			if current == goal:
-				goal.draw((0, 255, 0))
-				current.draw((0, 0, 255))
-				display.update()
 				self.path = [current]
 				while came_from[current] != None:
 					current = came_from[current]
 					self.path.append(current)
-			for neighbor in current.get_neighbors():
-				# neighbor.draw(self.game.world)
-				# display.update()
+			for neighbor in current.get_neighbors(world_height, world_width, tiles):
 				new_cost = cost_so_far[current] + 1
 				if neighbor not in cost_so_far or new_cost < cost_so_far[neighbor]:
 					cost_so_far[neighbor] = new_cost
@@ -127,10 +121,9 @@ class Entity:
 			end = (self.x + 50*cos(self.cohesion_angle), self.y + 50*sin(self.cohesion_angle))
 			draw.line(screen, (255, 255, 255), start, end)#white
 
-	def draw_path(self, screen):
-		length = self.game.tile_length
+	def draw_path(self, screen, length, camera_x, camera_y):
 		for tile in self.path:
-			rect = Rect(length*(tile.x - self.game.camera_x/length), length*(tile.y - self.game.camera_y/length), length, length)
+			rect = Rect(length*(tile.x - camera_x/length), length*(tile.y - camera_y/length), length, length)
 			draw.rect(screen, self.color, rect)
 
 	def draw(self, screen):
@@ -209,25 +202,25 @@ class Entity:
 			for j in range(this_y, this_y + self.rect.height/length + 1):
 				tiles[i][j].availability = True
 		for i in range(len(tiles[this_x][this_y].entities)):
-			if self.game.tiles[this_x][this_y].entities[i] == self:
-				del self.game.tiles[this_x][this_y].entities[i]
+			if tiles[this_x][this_y].entities[i] == self:
+				del tiles[this_x][this_y].entities[i]
 				break
-		world_x = int((self.x - self.size/2)/self.game.tile_length)
-		world_y = int((self.y - self.size/2)/self.game.tile_length)
-		for x in range(world_x, world_x + self.rect.width/self.game.tile_length + 1):
-			for y in range(world_y, world_y + self.rect.height/self.game.tile_length + 1):
-				self.game.tiles[x][y].availability = False
-		self.game.tiles[world_x][world_y].entities.append(self)
+		world_x = int((self.x - self.size/2)/length)
+		world_y = int((self.y - self.size/2)/length)
+		for x in range(world_x, world_x + self.rect.width/length + 1):
+			for y in range(world_y, world_y + self.rect.height/length + 1):
+				tiles[x][y].availability = False
+		tiles[world_x][world_y].entities.append(self)
 
-	def update(self, entities):
+	def update(self, entities, length, world_width, world_height, tiles):
 		x = self.x
 		y = self.y
 		self.rect = Rect(self.x - self.size/2, self.y - self.size/2, self.size, self.size)
-		self.neighbors = self.get_neighbors(self.neighbor_radius)
+		self.neighbors = self.get_neighbors(self.neighbor_radius, world_width, world_height, tiles)
 		self.update_path_angle()
 		self.update_separation_angle()
 		self.update_alignment_angle()
 		self.update_cohesion_angle()
 		self.update_location()
-		if self.x/self.game.tile_length != x or self.y/self.game.tile_length != y:
-			self.update_tiles(x, y, self.game.tile_length, self.game.tiles)
+		if self.x/length != x or self.y/length != y:
+			self.update_tiles(x, y, length, tiles)
