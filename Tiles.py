@@ -4,7 +4,7 @@ from pygame import *
 class Tile:
 
 	def __init__(self, x, y):
-		self.availability = True
+		self.blocked = False
 		self.entities = []
 		self.color = (randrange(232, 242), randrange(196, 206), randrange(170, 180))
 		self.x = x
@@ -22,7 +22,7 @@ class Tile:
 			return_list.append(tiles[self.x + 1][self.y])
 		return return_list
 
-	def draw(self, screen, length):
+	def draw(self, screen, color, length):
 		rect = Rect(self.x*length, self.y*length, length, length)
-		draw.rect(screen, self.color, rect)
+		draw.rect(screen, color, rect)
 

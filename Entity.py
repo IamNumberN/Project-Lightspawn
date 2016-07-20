@@ -14,44 +14,37 @@ class Entity:
 		self.rect = Rect(self.x - self.size/2, self.y - self.size/2, self.size, self.size)
 		self.max_health = 100
 		self.current_health = 100
-		self.speed = 1
-		self.path_weight = 1
-		self.path_angle = None
+		self.speed = 10
+		self.velocity_weight = 1
+		self.velocity_x = 0
+		self.velocity_y = 0
 		self.separation_weight = 0
-		self.separation_angle = None
+		self.separation_x = 0
+		self.separation_y = 0
 		self.alignment_weight = 0
-		self.alignment_angle = None
+		self.alignment_x = 0
+		self.alignment_y = 0
 		self.cohesion_weight = 0
-		self.cohesion_angle = None
+		self.cohesion_x = 0
+		self.cohesion_y = 0
 		self.path = []
 		self.buttons = []
 		self.neighbors = []
 		self.neighbor_radius = 32
 		self.setup()
 
-	def normalize(self, vector, constant):
-		scale = sqrt(vector[0]**2 + vector[1]**2)
-		x = vector[0]/scale
-		y = vector[0]/scale
-		return (constant*x, constant*y)
+	def setup(self):
+		self.max_health = 64
+		self.current_health = 64
 
-	def weighted_angle(self):
-		total = 0
-		total_weight = 0
-		if self.path_angle != None:
-			total += self.path_weight*self.path_angle
-			total_weight += self.path_weight
-		if self.separation_angle != None:
-			total += self.separation_weight*self.separation_angle/pi
-			total_weight += self.separation_weight
-		if self.alignment_angle != None:
-			total += self.alignment_weight*self.alignment_angle
-			total_weight += self.alignment_weight
-		if self.cohesion_angle != None:
-			total += self.cohesion_weight*self.cohesion_angle
-			total_weight += self.cohesion_weight
-		if total_weight != 0:
-			return total/total_weight
+	def normalize(self, vector, constant):
+		if sqrt(vector[0]**2 + vector[1]**2) > constant:
+			scale = sqrt(vector[0]**2 + vector[1]**2)
+			x = vector[0]/scale
+			y = vector[1]/scale
+			return (constant*x, constant*y)
+		else:
+			return (0, 0)
 
 	def get_neighbors(self, radius, world_width, world_height, tiles):
 		return_lst = []
@@ -63,8 +56,70 @@ class Entity:
 						return_lst.append(entity)
 		return return_lst
 
+	def darken(self, color, mag):
+		return (min(int(mag*color[0]), 255), min(int(mag*color[1]), 255), min(int(mag*color[2]), 255))
+
+	def weighted(self):
+		velocity_x = self.velocity_weight*self.velocity_x
+		velocity_y = self.velocity_weight*self.velocity_y
+		separation_x = self.separation_weight*self.separation_x
+		separation_y = self.separation_weight*self.separation_y
+		alignment_x = self.alignment_weight*self.alignment_x
+		alignment_y = self.alignment_weight*self.alignment_y
+		cohesion_x = self.cohesion_weight*self.cohesion_x
+		cohesion_y = self.cohesion_weight*self.cohesion_y
+		x = velocity_x + separation_x + alignment_x + cohesion_x
+		y = velocity_y + separation_y + alignment_y + cohesion_y
+		return self.normalize((x, y), 1)
+
 	def heuristic(self, goal, next):
 		return sqrt((goal.x - next.x)**2 + (goal.y - next.y)**2)
+
+	def line_of_sight(self, grandparrent, child, tiles):
+		x0 = grandparrent.x
+		y0 = grandparrent.y
+		x1 = child.x
+		y1 = child.y
+		dy = y1 - y0
+		dx = x1 - x0
+		f = 0
+		if dy < 0:
+			dy = -dy
+			sy = -1
+		else:
+			sy = 1
+		if dx < 0:
+			dx = -dx
+			sx = -1
+		else:
+			sx = 1
+		if dx >= dy:
+			while x0 != x1:
+				f += dy
+				if f >= dx:
+					if tiles[x0 + ((sx - 1)/2)][y0 + ((sy - 1)/2)].blocked:
+						return False
+					y0 += sy
+					f -= dx
+				if f != 0 and tiles[x0 + ((sx - 1)/2)][y0 + ((sy - 1)/2)].blocked:
+					return False
+				if dy == 0 and tiles[x0 + ((sx - 1)/2)][y0].blocked and tiles[x0 + ((sx - 1)/2)][y0 - 1].blocked:
+					return False
+				x0 += sx
+		else:
+			while y0 != y1:
+				f += dx
+				if f >= dy:
+					if tiles[x0 + ((sx - 1)/2)][y0 + ((sy - 1)/2)].blocked:
+						return False
+					x0 += sx
+					f -= dy
+				if f != 0 and tiles[x0 + ((sx - 1)/2)][y0 + ((sy - 1)/2)].blocked:
+					return False
+				if dy == 0 and tiles[x0][y0 + ((sy - 1)/2)].blocked and tiles[x0 - 1][y0 + ((sy - 1)/2)].blocked:
+					return False
+				y0 += sy
+ 		return True
 
 	def pathfind(self, start, goal, world_height, world_width, tiles):
 		frontier = []
@@ -80,25 +135,26 @@ class Entity:
 				self.path = [current]
 				while came_from[current] != None:
 					current = came_from[current]
-					self.path.append(current)
+					self.path.insert(0, current)
 				break
 			for neighbor in current.get_neighbors(world_height, world_width, tiles):
-				if (neighbor not in cost_so_far or new_cost < cost_so_far[neighbor]) and neighbor.availability:
+				if (neighbor not in cost_so_far or new_cost < cost_so_far[neighbor]) and not neighbor.blocked:
 					new_cost = cost_so_far[current] + len(neighbor.entities)
 					cost_so_far[neighbor] = new_cost
 					priority = new_cost + self.heuristic(goal, neighbor)
+					flag = True
 					for i in range(len(frontier)):
 						if priority < frontier[i][1]:
+							flag = False
 							frontier.insert(i, (neighbor, priority))
-							came_from[neighbor] = current
+							if came_from[current] != None and self.line_of_sight(came_from[current], neighbor, tiles):
+								came_from[neighbor] = came_from[current]
+							else:
+								came_from[neighbor] = current
 							break
-					frontier.insert(len(frontier), (neighbor, priority))
-					came_from[neighbor] = current
-
-	def setup(self):
-		self.max_health = 64
-		self.current_health = 64
-		self.speed = 1
+					if flag:
+						frontier.insert(len(frontier), (neighbor, priority))
+						came_from[neighbor] = current
 
 	def draw_line_to_destination(self, screen):
 		if len(self.path) > 2:
@@ -113,109 +169,101 @@ class Entity:
 		draw.rect(screen, (0, 0, 0), Rect(offset, (self.max_health, 32)))
 		draw.rect(screen, (0, 255, 0), Rect(offset, (self.current_health, 32)))
 
-	def draw_angles(self, screen):
-		start = (self.x, self.y)
-		if self.path_angle != None:
-			end = (self.x + 50*cos(self.path_angle), self.y + 50*sin(self.path_angle))
-			draw.line(screen, (255, 255, 0), start, end)#yellow
-		if self.separation_angle != None:
-			end = (self.x + 50*cos(self.separation_angle), self.y + 50*sin(self.separation_angle))
-			draw.line(screen, (0, 255, 255), start, end)#teal
-		if self.alignment_angle != None:
-			end = (self.x + 50*cos(self.alignment_angle), self.y + 50*sin(self.alignment_angle))
-			draw.line(screen, (255, 0, 255), start, end)#purple
-		if self.cohesion_angle != None:
-			end = (self.x + 50*cos(self.cohesion_angle), self.y + 50*sin(self.cohesion_angle))
-			draw.line(screen, (255, 255, 255), start, end)#white
-
 	def draw_path(self, screen, length):
 		for tile in self.path:
-			tile.draw(screen, length)
+			tile.draw(screen, self.darken(tile.color, 1.1), length)
+
+	def draw_happy(self, screen):
+		draw.circle(screen, self.color, (self.x, self.y), self.size/2)
 
 	def draw(self, screen):
+		# try:
+		# 	direction = self.weighted_angle()
+		# 	right_x = self.x + self.size*cos(direction - pi/3)/2
+		# 	right_y = self.y + self.size*sin(direction - pi/3)/2
+		# 	forward_x = self.x + sqrt(3)*self.size*cos(direction)/2
+		# 	forward_y = self.y + sqrt(3)*self.size*sin(direction)/2
+		# 	left_x  = self.x + self.size*cos(direction + pi/3)/2
+		# 	left_y = self.y + self.size*sin(direction + pi/3)/2
+		# 	draw.polygon(screen, self.color, [(right_x, right_y), (forward_x, forward_y), (left_x, left_y)])
+		# except:
+		# 	pass
 		draw.circle(screen, self.color, (self.x, self.y), self.size/2)
-		try:
-			direction = self.weighted_angle()
-			right_x = self.x + self.size*cos(direction - pi/3)/2
-			right_y = self.y + self.size*sin(direction - pi/3)/2
-			forward_x = self.x + sqrt(3)*self.size*cos(direction)/2
-			forward_y = self.y + sqrt(3)*self.size*sin(direction)/2
-			left_x  = self.x + self.size*cos(direction + pi/3)/2
-			left_y = self.y + self.size*sin(direction + pi/3)/2
-			draw.polygon(screen, self.color, [(right_x, right_y), (forward_x, forward_y), (left_x, left_y)])
-		except:
-			pass
+		# draw.circle(screen, (255, 255, 255), (self.x, self.y), self.size/4)
+		# draw.circle(screen, self.color, (self.x, self.y), self.size/8)
+		# rect = (self.x - 3*self.size/8, self.y - 3*self.size/8, 3*self.size/4, 3*self.size/4)	
+		# draw.arc(screen, self.darken(self.color, .9), rect, pi/4, 3*pi/4)
 
-	def update_path_angle(self):
+	def update_velocity(self, length):
+		self.velocity_x = 0
+		self.velocity_y = 0
 		if self.path != []:
-			self.path_angle = atan2((self.path[0].y*64 - self.y), (self.path[0].y*64 - self.x))
-		else:
-			self.path_angle = None
+			velocity_x = self.path[0].x*length + length/2 - self.x
+			velocity_y = self.path[0].y*length + length/2 - self.y
+			if sqrt(velocity_x**2 + velocity_y**2) < self.speed:
+				self.path.pop(0)
+			else:
+				self.velocity_x = velocity_x
+				self.velocity_y = velocity_y
+		#print "velocity", self.velocity_x, self.velocity_y
 
-	def update_separation_angle(self):
-		separation_angles = []
-		seperation_angles_weights = 0
-		self.separation_angle = None
+	def update_separation(self):
+		self.separation_x = 0
+		self.separation_y = 0
+		if self.neighbors == []:
+			return
 		for entity in self.neighbors:
-			if self.path_angle != None:
-				adjacent = sqrt((entity.x - self.x)**2 + (entity.y - self.y)**2)
-				angle = 2*atan2(entity.size/2, adjacent)
-				angle_to_entity = atan2(entity.y - self.y, entity.x - self.x)
-				if self.path_angle < angle_to_entity + angle and self.path_angle > angle_to_entity - angle:
-					if self.path_angle > angle_to_entity:
-						separation_angles.append((angle_to_entity + angle)%(2*pi))
-					elif self.path_angle <= angle_to_entity:
-						separation_angles.append((angle_to_entity - angle)%(2*pi))
-		if separation_angles != []:
-			self.separation_angle = sum(separation_angles)/len(separation_angles)
+			self.separation_x += self.x - entity.x
+			self.separation_y += self.y - entity.y
+		self.separation_x /= len(self.neighbors)
+		self.separation_y /= len(self.neighbors)
+		print "separation", self.separation_x, self.separation_y
 
-	def update_alignment_angle(self):
-		alignment_angles  = []
-		self.alignment_angle = None
+	def update_alignment(self):
+		self.alignment_x = 0
+		self.alignment_y = 0
+		if self.neighbors == []:
+			return
 		for entity in self.neighbors:
-			if entity.path_angle != None:
-				alignment_angles.append(entity.path_angle)
-		if alignment_angles != []:
-			self.alignment_angle = sum(alignment_angles)/len(alignment_angles)
+			self.alignment_x += entity.velocity_x
+			self.alignment_y += entity.velocity_y
+		self.alignment_x /= len(self.neighbors)
+		self.alignment_y /= len(self.neighbors)
+		print "alignment", self.alignment_x, self.alignment_y
 
-	def update_cohesion_angle(self):
-		cohesion_x = []
-		cohesion_y = []
-		self.cohesion_angle = None
+	def update_cohesion(self):
+		self.cohesion_x = 0
+		self.cohesion_y = 0
+		if self.neighbors == []:
+			return
 		for entity in self.neighbors:
-			if entity.path_angle != None:
-				cohesion_x.append(entity.x)
-				cohesion_y.append(entity.y)
-		if cohesion_x != []:
-			y = sum(cohesion_y)/len(cohesion_y) - self.y
-			x = sum(cohesion_x)/len(cohesion_x) - self.x
-			self.cohesion_angle = atan2(y, x)
+			self.cohesion_x += entity.x
+			self.cohesion_y += entity.y
+		self.cohesion_x /= len(self.neighbors)
+		self.cohesion_y /= len(self.neighbors)
+		self.cohesion_x -= self.x
+		self.cohesion_y -= self.y
+		print "cohesion", self.cohesion_x, self.cohesion_y
 
 	def update_location(self):
-		if self.path != [] and sqrt((self.path[0].y*64 - self.y)**2 + (self.path[0].x*64 - self.x)**2) < self.speed:
-			del self.path[0]
-		else:
-			try:
-				self.x += int(self.speed*cos(self.weighted_angle()))
-				self.y += int(self.speed*sin(self.weighted_angle()))
-			except:
-				pass
+		self.x += int(self.speed*self.weighted()[0])
+		self.y += int(self.speed*self.weighted()[1])
 
 	def update_tiles(self, x, y, length, tiles):
 		this_x = (x - self.size/2)/length
 		this_y = (y - self.size/2)/length
-		for i in range(this_x, this_x + self.rect.width/length + 1):
-			for j in range(this_y, this_y + self.rect.height/length + 1):
-				tiles[i][j].availability = True
+		# for i in range(this_x, this_x + self.rect.width/length + 1):
+		# 	for j in range(this_y, this_y + self.rect.height/length + 1):
+		# 		tiles[i][j].blocked = False
 		for i in range(len(tiles[this_x][this_y].entities)):
 			if tiles[this_x][this_y].entities[i] == self:
 				del tiles[this_x][this_y].entities[i]
 				break
 		world_x = (self.x - self.size/2)/length
 		world_y = (self.y - self.size/2)/length
-		for x in range(world_x, world_x + self.rect.width/length + 1):
-			for y in range(world_y, world_y + self.rect.height/length + 1):
-				tiles[x][y].availability = False
+		# for x in range(world_x, world_x + self.rect.width/length + 1):
+		# 	for y in range(world_y, world_y + self.rect.height/length + 1):
+		# 		tiles[x][y].blocked = True
 		tiles[world_x][world_y].entities.append(self)
 
 	def update(self, entities, length, world_width, world_height, tiles):
@@ -223,10 +271,10 @@ class Entity:
 		y = self.y
 		self.rect = Rect(self.x - self.size/2, self.y - self.size/2, self.size, self.size)
 		self.neighbors = self.get_neighbors(self.neighbor_radius, world_width, world_height, tiles)
-		self.update_path_angle()
-		self.update_separation_angle()
-		self.update_alignment_angle()
-		self.update_cohesion_angle()
+		self.update_velocity(length)
+		self.update_separation()
+		self.update_alignment()
+		self.update_cohesion()
 		self.update_location()
 		if self.x/length != x or self.y/length != y:
 			self.update_tiles(x, y, length, tiles)
