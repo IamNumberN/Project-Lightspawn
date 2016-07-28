@@ -2,6 +2,7 @@ from Entity import *
 from Tiles import *
 from State import *
 from Button import *
+from Room00 import *
 from pygame import *
 from pygame.locals import *
 from sys import *
@@ -9,6 +10,7 @@ from math import *
 from random import *
 from time import *
 from csv import *
+from pickle import *
 
 def change_state(delete, create):
 	del delete
@@ -18,28 +20,31 @@ def timer(function, *args):
 		start = time()
 		function(*args)
 		end = time()
-		print function.__name__, ":", end - start
+		print function.__name__, ":", end - start 
  
 class GameState(State):
 
 	def setup(self):
+		self.show_grid = False
+		self.show_world_available = True
+		self.move_camera = False
+		self.save = False
 		self.camera_x = 0
 		self.camera_y = 0
-		self.world_width = 200
-		self.world_height = 200
+		self.world_width = 100
+		self.world_height = 120
 		self.tile_length = 64
 		self.world = Surface((self.world_width*self.tile_length, self.world_height*self.tile_length))
 		self.tiles = [[Tile(x, y) for y in range(self.world_height)] for x in range(self.world_width)]
 		self.draw_world()
-		self.buttons = []
-		self.entities = [Entity(self.tiles, 128*i, 128*i) for i in range(2, 3)]
+		self.buttons = [Button(self.load, 16, 16), Button(self.toggle_save, 96, 16)]
+		self.entities = [Entity(self.tiles, 128*i, 128*i, self.world_width, self.world_height) for i in range(2, 20)]
 		self.click_x = None
 		self.click_y = None
 		self.selection_box = None
-		self.entities_selected = [self.entities[0]]
-		self.show_grid = False
-		self.show_world_available = True
-		self.move_camera = False
+		self.entities_selected = self.entities
+		self.frame = 0
+		self.load_file_name = "lots of things diagonal.txt"
 
 	def mouse_x(self):
 		return mouse.get_pos()[0]
@@ -55,6 +60,23 @@ class GameState(State):
 
 	def camera_mouse_y(self):
 		return self.mouse_y() - self.camera_y
+
+	def mouse_tile(self):
+		x = min(self.world_width - 1, self.camera_mouse_x()/self.tile_length)
+		y = min(self.world_height - 1, self.camera_mouse_y()/self.tile_length)
+		if x < 0 or y < 0:
+			return None
+		else:
+			return self.tiles[x][y]
+
+	def load(self):
+		self.tiles = load(open(self.load_file_name, "r+"))
+		self.world_width = len(self.tiles)
+		self.world_height = len(self.tiles[0])
+
+	def toggle_save(self):
+		self.buttons[1].color = (200, 200, 200) if self.save else (100, 100, 100)
+		self.save = not self.save
 
 	def click_began(self):
 		flag = True
@@ -75,15 +97,14 @@ class GameState(State):
 			self.selection_box = Rect(-1, -1, 0, 0)
 
 	def right_click_began(self):
+		#print "click frame:", self.frame
 		#set a destination and velocity for all entities
 		for entity in self.entities_selected:
-			keys = key.get_pressed()
-			if not (keys[K_LSHIFT] or entity.path == []):
-				entity.path = []
 			start = self.tiles[entity.x/self.tile_length][entity.y/self.tile_length]
-			end = self.tiles[self.camera_mouse_x()/self.tile_length][self.camera_mouse_y()/self.tile_length]
-			if not end.blocked:
-				entity.pathfind(start, end, self.world_height, self.world_width, self.tiles)
+			end = self.mouse_tile()
+			if end != None and not end.blocked:
+				entity.pathfind(start, end, self.world_height, self.world_width, self.tiles, self.tile_length)
+				#timer(entity.draw_line_of_sight, end, start, self.tiles, self.tile_length, screen)
 
 	def mouse_moved(self):
 		#update size of rectangle select
@@ -111,26 +132,24 @@ class GameState(State):
 			self.click_y = None
 
 	def draw_world(self):
-		length = self.tile_length
-		for x in range(screen.get_width()/length + 2):
-			for y in range(screen.get_height()/length + 2):
-				tile = self.tiles[x- self.camera_x/length - 1][y- self.camera_y/length - 1]
-				tile.draw(self.world, tile.color, self.tile_length)
-
-	def draw_tile_available(self):
-		if self.show_world_available:
-			length = self.tile_length
-			for x in range(screen.get_width()/length + 1):
-				for y in range(screen.get_height()/length + 1):
-					if self.tiles[x - self.camera_x/length][y - self.camera_y/length].blocked == True:
-						rect = Rect(length*(x - self.camera_x/length), length*(y - self.camera_y/length), length, length)
-						draw.rect(self.world, (255, 100, 100), rect)
+		top = max(0, -self.camera_y/self.tile_length - 1)
+		bottom = min(self.world_height, (-self.camera_y + screen.get_height())/self.tile_length + 1)
+		left = max(0, -self.camera_x/self.tile_length - 1)
+		right = min(self.world_width, (-self.camera_x + screen.get_width())/self.tile_length + 1)
+		for x in range(left, right):
+			for y in range(top, bottom):
+				if self.show_world_available and self.tiles[x][y].blocked == True:
+					rect = Rect(self.tile_length*x, self.tile_length*y, self.tile_length, self.tile_length)
+					draw.rect(self.world, (255, 100, 100), rect)
+				else:
+					tile = self.tiles[x][y]
+					tile.draw(self.world, tile.color, self.tile_length)
 
 	def draw_grid(self):
 		if self.show_grid:
 			length = self.tile_length
 			for x in range(screen.get_width()/length + 1):
-				start = (length*x - self.camera_x/length*length, -self.camera_y)
+				start = (length*x - self.camera_x/length*length, - self.camera_y)
 				end = (length*x - self.camera_x/length*length, screen.get_height() - self.camera_y)
 				draw.line(self.world, (200, 255, 200), start, end)
 			for y in range(screen.get_height()/length + 1):
@@ -143,18 +162,14 @@ class GameState(State):
 			#entity.draw_line_to_destination(self.world)
 			entity.draw_path(self.world, self.tile_length)
 			#entity.draw_angles(self.world)
-			left = -self.camera_x - entity.rect.width
-			right = -self.camera_x + screen.get_width() + entity.rect.width
-			top = -self.camera_y -entity.rect.height
-			bottom = -self.camera_y + screen.get_height() + entity.rect.height
+			left = -self.camera_x - entity.size/2
+			right = -self.camera_x + screen.get_width() + entity.size/2
+			top = -self.camera_y - entity.size/2
+			bottom = -self.camera_y + screen.get_height() + entity.size/2
 			if left <= entity.x <= right and top <= entity.y <= bottom:
 				if entity.rect.collidepoint(self.camera_mouse()):
 					entity.draw_health(self.world)
 				entity.draw(self.world)
-
-	def draw_entities_health(self):
-		for entity in self.entities_selected:
-			entity.draw_health(self.world)
 
 	def draw_selection_box(self):
 		if self.selection_box != None:
@@ -165,14 +180,12 @@ class GameState(State):
 			screen.set_at((entity.x/64, entity.y/64 + screen.get_height() - 256), entity.color)
 
 	def draw_buttons(self):
-		button_background = Rect(screen.get_width() - 256, screen.get_height() - 256, 256, 256)
-		draw.rect(screen, (0, 0, 0), button_background)
 		for button in self.buttons:
 			if button.rect.collidepoint(mouse.get_pos()):
 				lighter_color = (button.color[0] + 10, button.color[1] + 10, button.color[2] + 10)
-				button.draw(lighter_color)
+				button.draw(screen, lighter_color)
 			else:
-				button.draw(button.color)
+				button.draw(screen, button.color)
 
 	def draw_neighbors(self):
 		tile = self.tiles[self.camera_mouse_x()/self.tile_length][self.camera_mouse_y()/self.tile_length]
@@ -182,15 +195,13 @@ class GameState(State):
 
 	def draw(self):
 		self.draw_world()
-		self.draw_tile_available()
 		#self.draw_neighbors()
 		self.draw_grid()
 		self.draw_entities()
-		self.draw_entities_health()
 		screen.blit(self.world, (self.camera_x, self.camera_y))
 		self.draw_selection_box()
 		#self.draw_map()
-		#self.draw_buttons
+		self.draw_buttons()
 		display.update()
 
 	def update_camera(self):
@@ -222,15 +233,21 @@ class GameState(State):
 
 	def update_entities(self):
 		for entity in self.entities:
-			entity.update(self.entities, self.tile_length, self.world_width, self.world_height, self.tiles)
+			entity.update(self.entities, self.tile_length, self.tiles)
 
 	def update(self):
+		self.frame += 1
 		self.update_camera()
 		self.kill_dead_entities()
-		self.update_buttons()
+		#self.update_buttons()
 		self.update_entities()
+
+	def stop(self):
+		if self.save:
+			dump(self.tiles, open(str(time()) + ".txt", "w+"))
+		exit()
 
 if __name__ == '__main__':
 	init()
-	screen = display.set_mode((1920, 1080))
+	screen = display.set_mode((1366, 768), FULLSCREEN)
 	new_game = GameState(screen)

@@ -1,5 +1,6 @@
 from pygame import *
 from time import *
+from csv import *
 
 class State():
 
@@ -8,7 +9,6 @@ class State():
 		self.last_pos = mouse.get_pos()
 		self.last_time = time()
 		self.minimized = False
-		self.count = 0
 		self.setup()
 		self.handle_update(sceen)
 
@@ -55,9 +55,8 @@ class State():
 		delta = time() - self.last_time
 		if delta < interval:
 			sleep(interval - delta)
-		else:
-			self.count += 1
-			#print "lagging", self.count
+		# else:
+		# 	print "lagging", self.frame, delta
 		self.last_time = time()
 
 	def present_other_scene(self, other_scene):
@@ -84,11 +83,11 @@ class State():
 					self.right_click_ended()
 			if evnt.type == MOUSEMOTION:
 				self.mouse_moved()
-			if evnt.type == ACTIVEEVENT:
-				if evnt.state == 2 and evnt.gain == 0:
-					self.minimize()
-				if evnt.state == 2 and evnt.gain == 1:
-					self.maximize()
+			# if evnt.type == ACTIVEEVENT:
+			# 	if evnt.state == 2 and evnt.gain == 0:
+			# 		self.minimize()
+			# 	if evnt.state == 2 and evnt.gain == 1:
+			# 		self.maximize()
 			if evnt.type == KEYDOWN:
 				if evnt.key == K_ESCAPE:
 					self.stop()
@@ -107,7 +106,7 @@ class State():
 			self.handle_draw(screen)
 			d = time()
 			self.tick()	
-			# with open("data.csv", "a") as csvfile:
-			# 	writer = writer(csvfile)
-			# 	writer.writerow([c-b])
-			#print "handle events:", b - a, "update:", c - b, "draw:", d - c
+			with open("data.csv", "a") as csvfile:
+				write = writer(csvfile)
+				write.writerow([d - a])
+			print "frame:", self.frame, "handle events:", b - a, "update:", c - b, "draw:", d - c, "total:", d - a

@@ -3,9 +3,15 @@ from math import *
 from random import *
 from time import *
 
+def timer(function, *args):
+		start = time()
+		function(*args)
+		end = time()
+		print function.__name__, ":", end - start
+
 class Entity:
 
-	def __init__(self, tiles, x, y):
+	def __init__(self, tiles, x, y, world_width, world_height):
 		self.x = x
 		self.y = y
 		tiles[x/64][y/64].entities.append(self)
@@ -14,7 +20,7 @@ class Entity:
 		self.rect = Rect(self.x - self.size/2, self.y - self.size/2, self.size, self.size)
 		self.max_health = 100
 		self.current_health = 100
-		self.speed = 10
+		self.speed = 20
 		self.velocity_weight = 1
 		self.velocity_x = 0
 		self.velocity_y = 0
@@ -29,13 +35,12 @@ class Entity:
 		self.cohesion_y = 0
 		self.path = []
 		self.buttons = []
-		self.neighbors = []
 		self.neighbor_radius = 32
+		self.neighbors = self.get_neighbors(self.neighbor_radius, world_width, world_height, tiles)
 		self.setup()
 
 	def setup(self):
-		self.max_health = 64
-		self.current_health = 64
+		pass
 
 	def normalize(self, vector, constant):
 		if sqrt(vector[0]**2 + vector[1]**2) > constant:
@@ -75,53 +80,60 @@ class Entity:
 	def heuristic(self, goal, next):
 		return sqrt((goal.x - next.x)**2 + (goal.y - next.y)**2)
 
-	def line_of_sight(self, grandparrent, child, tiles):
-		x0 = grandparrent.x
-		y0 = grandparrent.y
-		x1 = child.x
-		y1 = child.y
-		dy = y1 - y0
-		dx = x1 - x0
-		f = 0
-		if dy < 0:
-			dy = -dy
-			sy = -1
-		else:
-			sy = 1
-		if dx < 0:
-			dx = -dx
-			sx = -1
-		else:
-			sx = 1
-		if dx >= dy:
-			while x0 != x1:
-				f += dy
-				if f >= dx:
-					if tiles[x0 + ((sx - 1)/2)][y0 + ((sy - 1)/2)].blocked:
-						return False
-					y0 += sy
-					f -= dx
-				if f != 0 and tiles[x0 + ((sx - 1)/2)][y0 + ((sy - 1)/2)].blocked:
-					return False
-				if dy == 0 and tiles[x0 + ((sx - 1)/2)][y0].blocked and tiles[x0 + ((sx - 1)/2)][y0 - 1].blocked:
-					return False
-				x0 += sx
-		else:
-			while y0 != y1:
-				f += dx
-				if f >= dy:
-					if tiles[x0 + ((sx - 1)/2)][y0 + ((sy - 1)/2)].blocked:
-						return False
-					x0 += sx
-					f -= dy
-				if f != 0 and tiles[x0 + ((sx - 1)/2)][y0 + ((sy - 1)/2)].blocked:
-					return False
-				if dy == 0 and tiles[x0][y0 + ((sy - 1)/2)].blocked and tiles[x0 - 1][y0 + ((sy - 1)/2)].blocked:
-					return False
-				y0 += sy
- 		return True
+	def while_condition(self, var, other_var, direction):
+		if direction < 0:
+			return var > other_var
+		elif direction > 0:
+			return var < other_var
 
-	def pathfind(self, start, goal, world_height, world_width, tiles):
+	def line_of_sight(self, grandparrent, child, tiles, length):
+		dx = length*(grandparrent.x - child.x)
+		dy = length*(grandparrent.y - child.y)
+		#verticle intersections
+		if dy != 0:
+			if dx < 0:
+				x = child.x*length + length
+			elif dx > 0:
+				x = child.x*length - length
+			elif dx == 0:
+				x = child.x*length
+			#pointing up
+			if dy < 0:
+				y = child.y*length + length
+				Ya = -length
+			#pointing down
+			elif dy > 0:
+				y = child.y*length - length
+				Ya = length
+			while self.while_condition(y, length*grandparrent.y, Ya):
+				if tiles[int(x/length)][int(y/length)].blocked:
+					return False
+				y += Ya
+				x += float(dx)/dy*Ya
+		#horizontal intersections
+		if dx != 0:
+			if dy < 0:
+				y = child.y*length + length
+			elif dy > 0:
+				y = child.y*length - length
+			elif dy == 0:
+				y = child.y*length
+			#pointing left
+			if dx < 0:
+				x = child.x*length + length
+				Xa = -length
+			#pointing right
+			elif dx > 0:
+				x = child.x*length - length
+				Xa = length
+			while self.while_condition(x, length*grandparrent.x, Xa):
+				if tiles[int(x/length)][int(y/length)].blocked:
+					return False
+				x += Xa
+				y += float(dy)/dx*Xa
+		return True
+
+	def pathfind(self, start, goal, world_height, world_width, tiles, length):
 		frontier = []
 		frontier.append((start, 0))
 		came_from = {}
@@ -139,7 +151,7 @@ class Entity:
 				break
 			for neighbor in current.get_neighbors(world_height, world_width, tiles):
 				if (neighbor not in cost_so_far or new_cost < cost_so_far[neighbor]) and not neighbor.blocked:
-					new_cost = cost_so_far[current] + len(neighbor.entities)
+					new_cost = cost_so_far[current] + len(neighbor.entities) + 1
 					cost_so_far[neighbor] = new_cost
 					priority = new_cost + self.heuristic(goal, neighbor)
 					flag = True
@@ -147,7 +159,7 @@ class Entity:
 						if priority < frontier[i][1]:
 							flag = False
 							frontier.insert(i, (neighbor, priority))
-							if came_from[current] != None and self.line_of_sight(came_from[current], neighbor, tiles):
+							if came_from[current] != None and self.line_of_sight(came_from[current], neighbor, tiles, length):
 								came_from[neighbor] = came_from[current]
 							else:
 								came_from[neighbor] = current
@@ -155,6 +167,58 @@ class Entity:
 					if flag:
 						frontier.insert(len(frontier), (neighbor, priority))
 						came_from[neighbor] = current
+
+	def draw_line_of_sight(self, grandparrent, child, tiles, length, screen):
+		dx = length*(grandparrent.x - child.x)
+		dy = length*(grandparrent.y - child.y)
+		#verticle intersections
+		if dy != 0:
+			if dx < 0:
+				x = child.x*length + length
+			elif dx > 0:
+				x = child.x*length - length
+			elif dx == 0:
+				x - child.x*length
+			#pointing up
+			if dy < 0:
+				y = child.y*length + length
+				Ya = -length
+			#pointing down
+			elif dy > 0:
+				y = child.y*length - length
+				Ya = length
+			while self.while_condition(y, length*grandparrent.y, Ya):
+				tiles[int(x/length)][int(y/length)].draw(screen, (0, 0, 0), length)
+				display.update()
+				sleep(.1)
+				if tiles[int(x/length)][int(y/length)].blocked:
+					return
+				y += Ya
+				x += float(dx)/dy*Ya
+		#horizontal intersections
+		if dx != 0:
+			if dy < 0:
+				y = child.y*length + length
+			elif dy > 0:
+				y = child.y*length - length
+			elif dy == 0:
+				y = child.y*length
+			#pointing left
+			if dx < 0:
+				x = child.x*length + length
+				Xa = -length
+			#pointing right
+			elif dx > 0:
+				x = child.x*length - length
+				Xa = length
+			while self.while_condition(x, length*grandparrent.x, Xa):
+				tiles[int(x/length)][int(y/length)].draw(screen, (0, 0, 0), length)
+				display.update()
+				sleep(.1)
+				if tiles[int(x/length)][int(y/length)].blocked:
+					return
+				x += Xa
+				y += float(dy)/dx*Xa
 
 	def draw_line_to_destination(self, screen):
 		if len(self.path) > 2:
@@ -189,10 +253,6 @@ class Entity:
 		# except:
 		# 	pass
 		draw.circle(screen, self.color, (self.x, self.y), self.size/2)
-		# draw.circle(screen, (255, 255, 255), (self.x, self.y), self.size/4)
-		# draw.circle(screen, self.color, (self.x, self.y), self.size/8)
-		# rect = (self.x - 3*self.size/8, self.y - 3*self.size/8, 3*self.size/4, 3*self.size/4)	
-		# draw.arc(screen, self.darken(self.color, .9), rect, pi/4, 3*pi/4)
 
 	def update_velocity(self, length):
 		self.velocity_x = 0
@@ -217,7 +277,7 @@ class Entity:
 			self.separation_y += self.y - entity.y
 		self.separation_x /= len(self.neighbors)
 		self.separation_y /= len(self.neighbors)
-		print "separation", self.separation_x, self.separation_y
+		#print "separation", self.separation_x, self.separation_y
 
 	def update_alignment(self):
 		self.alignment_x = 0
@@ -229,7 +289,7 @@ class Entity:
 			self.alignment_y += entity.velocity_y
 		self.alignment_x /= len(self.neighbors)
 		self.alignment_y /= len(self.neighbors)
-		print "alignment", self.alignment_x, self.alignment_y
+		#print "alignment", self.alignment_x, self.alignment_y
 
 	def update_cohesion(self):
 		self.cohesion_x = 0
@@ -243,7 +303,7 @@ class Entity:
 		self.cohesion_y /= len(self.neighbors)
 		self.cohesion_x -= self.x
 		self.cohesion_y -= self.y
-		print "cohesion", self.cohesion_x, self.cohesion_y
+		#print "cohesion", self.cohesion_x, self.cohesion_y
 
 	def update_location(self):
 		self.x += int(self.speed*self.weighted()[0])
@@ -252,25 +312,22 @@ class Entity:
 	def update_tiles(self, x, y, length, tiles):
 		this_x = (x - self.size/2)/length
 		this_y = (y - self.size/2)/length
-		# for i in range(this_x, this_x + self.rect.width/length + 1):
-		# 	for j in range(this_y, this_y + self.rect.height/length + 1):
-		# 		tiles[i][j].blocked = False
 		for i in range(len(tiles[this_x][this_y].entities)):
 			if tiles[this_x][this_y].entities[i] == self:
 				del tiles[this_x][this_y].entities[i]
 				break
 		world_x = (self.x - self.size/2)/length
 		world_y = (self.y - self.size/2)/length
-		# for x in range(world_x, world_x + self.rect.width/length + 1):
-		# 	for y in range(world_y, world_y + self.rect.height/length + 1):
-		# 		tiles[x][y].blocked = True
 		tiles[world_x][world_y].entities.append(self)
 
-	def update(self, entities, length, world_width, world_height, tiles):
+	def update_neighbors(self):
+		pass
+
+	def update(self, entities, length, tiles):
 		x = self.x
 		y = self.y
 		self.rect = Rect(self.x - self.size/2, self.y - self.size/2, self.size, self.size)
-		self.neighbors = self.get_neighbors(self.neighbor_radius, world_width, world_height, tiles)
+		# self.neighbors = self.get_neighbors(self.neighbor_radius, world_width, world_height, tiles)
 		self.update_velocity(length)
 		self.update_separation()
 		self.update_alignment()
@@ -278,3 +335,4 @@ class Entity:
 		self.update_location()
 		if self.x/length != x or self.y/length != y:
 			self.update_tiles(x, y, length, tiles)
+			self.update_neighbors()
