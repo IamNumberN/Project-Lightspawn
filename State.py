@@ -47,6 +47,12 @@ class State():
 	def resize(self):
 		pass
 
+	def keys(self):
+		pass
+
+	def events(self, event):
+		pass
+
 	def draw(self):
 		display.update()
 
@@ -55,8 +61,8 @@ class State():
 		delta = time() - self.last_time
 		if delta < interval:
 			sleep(interval - delta)
-		# else:
-		# 	print "lagging", self.frame, delta
+		else:
+			print "lagging", self.frame, delta
 		self.last_time = time()
 
 	def present_other_scene(self, other_scene):
@@ -91,6 +97,8 @@ class State():
 			if evnt.type == KEYDOWN:
 				if evnt.key == K_ESCAPE:
 					self.stop()
+			self.keys()
+			self.events(evnt)
 
 	def handle_draw(self, screen):
 		screen.fill((0, 0, 0))
@@ -106,7 +114,7 @@ class State():
 			self.handle_draw(screen)
 			d = time()
 			self.tick()	
-			with open("data.csv", "a") as csvfile:
-				write = writer(csvfile)
-				write.writerow([d - a])
-			print "frame:", self.frame, "handle events:", b - a, "update:", c - b, "draw:", d - c, "total:", d - a
+			# with open("data.csv", "a") as csvfile:
+			# 	write = writer(csvfile)
+			# 	write.writerow([d - a])
+			# print "frame:", self.frame, "handle events:", b - a, "update:", c - b, "draw:", d - c, "total:", d - a

@@ -5,6 +5,7 @@ class Tile:
 
 	def __init__(self, x, y):
 		self.type = 0
+		self.seen = False
 		self.blocked = False
 		self.entities = []
 		self.color = (randrange(232, 242), randrange(196, 206), randrange(170, 180))
@@ -27,6 +28,12 @@ class Tile:
 			return_list.append(tiles[self.x + 1][self.y])
 		if self.y != 0 and self.x != 0:
 			return_list.append(tiles[self.x - 1][self.y - 1])
+		if self.y != 0 and self.x != world_width - 1:
+			return_list.append(tiles[self.x + 1][self.y - 1])
+		if self.y != world_height - 1 and self.x != 0:
+			return_list.append(tiles[self.x - 1][self.y + 1])
+		if self.y != world_height - 1 and self.x != world_width - 1:
+			return_list.append(tiles[self.x + 1][self.y + 1])
 		return return_list
 
 	def draw(self, screen, color, length):

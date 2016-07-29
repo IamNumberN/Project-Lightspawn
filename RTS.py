@@ -27,22 +27,32 @@ class GameState(State):
 	def setup(self):
 		self.show_grid = False
 		self.show_world_available = True
-		self.move_camera = False
+		self.move_camera = True
 		self.save = False
 		self.camera_x = 0
 		self.camera_y = 0
 		self.world_width = 100
 		self.world_height = 120
-		self.tile_length = 64
+		self.tile_length = 16
 		self.world = Surface((self.world_width*self.tile_length, self.world_height*self.tile_length))
 		self.tiles = [[Tile(x, y) for y in range(self.world_height)] for x in range(self.world_width)]
 		self.draw_world()
 		self.buttons = [Button(self.load, 16, 16), Button(self.toggle_save, 96, 16)]
-		self.entities = [Entity(self.tiles, 128*i, 128*i, self.world_width, self.world_height) for i in range(2, 20)]
+		self.entities = [Entity(self.tiles, 64*i, 64*i, self.tile_length) for i in range(1, 10)]
 		self.click_x = None
 		self.click_y = None
 		self.selection_box = None
 		self.entities_selected = self.entities
+		self.entities_selected0 = []
+		self.entities_selected1 = []
+		self.entities_selected2 = []
+		self.entities_selected3 = []
+		self.entities_selected4 = []
+		self.entities_selected5 = []
+		self.entities_selected6 = []
+		self.entities_selected7 = []
+		self.entities_selected8 = []
+		self.entities_selected9 = []
 		self.frame = 0
 		self.load_file_name = "lots of things diagonal.txt"
 
@@ -91,8 +101,8 @@ class GameState(State):
 				self.entities_selected = [entity]
 				flag = False
 		if flag:
+			#self.tiles[self.camera_mouse_x()/64][self.camera_mouse_y()/64].blocked = not self.tiles[self.camera_mouse_x()/64][self.camera_mouse_y()/64].blocked
 			#self.entities_selected = []
-			self.tiles[self.camera_mouse_x()/64][self.camera_mouse_y()/64].blocked = not self.tiles[self.camera_mouse_x()/64][self.camera_mouse_y()/64].blocked
 			(self.click_x, self.click_y) = mouse.get_pos()
 			self.selection_box = Rect(-1, -1, 0, 0)
 
@@ -131,6 +141,50 @@ class GameState(State):
 			self.click_x = None
 			self.click_y = None
 
+	def keys(self):
+		keys = key.get_pressed()
+		if keys[K_LCTRL] and keys[K_0]:
+			self.entities_selected0 = self.entities_selected
+		if not keys[K_LCTRL] and keys[K_1] and self.entities_selected0 != []:
+			self.entities_selected = self.entities_selected0
+		if keys[K_LCTRL] and keys[K_1]:
+			self.entities_selected1 = self.entities_selected
+		if not keys[K_LCTRL] and keys[K_1] and self.entities_selected1 != []:
+			self.entities_selected = self.entities_selected1
+		if keys[K_LCTRL] and keys[K_2]:
+			self.entities_selected2 = self.entities_selected
+		if not keys[K_LCTRL] and keys[K_2] and self.entities_selected2 != []:
+			self.entities_selected = self.entities_selected2
+		if keys[K_LCTRL] and keys[K_3]:
+			self.entities_selected3 = self.entities_selected
+		if not keys[K_LCTRL] and keys[K_3] and self.entities_selected3 != []:
+			self.entities_selected = self.entities_selected3
+		if keys[K_LCTRL] and keys[K_4]:
+			self.entities_selected4 = self.entities_selected
+		if not keys[K_LCTRL] and keys[K_4] and self.entities_selected4 != []:
+			self.entities_selected = self.entities_selected4
+		if keys[K_LCTRL] and keys[K_5]:
+			self.entities_selected5 = self.entities_selected
+		if not keys[K_LCTRL] and keys[K_5] and self.entities_selected5 != []:
+			self.entities_selected = self.entities_selected5
+		if keys[K_LCTRL] and keys[K_6]:
+			self.entities_selected6 = self.entities_selected
+		if not keys[K_LCTRL] and keys[K_6] and self.entities_selected6 != []:
+			self.entities_selected = self.entities_selected6
+		if keys[K_LCTRL] and keys[K_7]:
+			self.entities_selected7 = self.entities_selected
+		if not keys[K_LCTRL] and keys[K_7] and self.entities_selected7 != []:
+			self.entities_selected = self.entities_selected7
+		if keys[K_LCTRL] and keys[K_8]:
+			self.entities_selected8 = self.entities_selected
+		if not keys[K_LCTRL] and keys[K_8] and self.entities_selected8 != []:
+			self.entities_selected = self.entities_selected8
+		if keys[K_LCTRL] and keys[K_9]:
+			self.entities_selected9 = self.entities_selected
+		if not keys[K_LCTRL] and keys[K_9] and self.entities_selected9 != []:
+			self.entities_selected = self.entities_selected9
+		
+
 	def draw_world(self):
 		top = max(0, -self.camera_y/self.tile_length - 1)
 		bottom = min(self.world_height, (-self.camera_y + screen.get_height())/self.tile_length + 1)
@@ -157,18 +211,22 @@ class GameState(State):
 				end = (screen.get_width() - self.camera_x, length*y - self.camera_y/length*length)
 				draw.line(self.world, (200, 255, 200), start, end)
 
+	def draw_enities_selected(self):
+		for entity in self.entities_selected:
+			entity.draw_selected(self.world)
+
 	def draw_entities(self):
 		for entity in self.entities:
 			#entity.draw_line_to_destination(self.world)
-			entity.draw_path(self.world, self.tile_length)
+			#entity.draw_path(self.world, self.tile_length)
 			#entity.draw_angles(self.world)
 			left = -self.camera_x - entity.size/2
 			right = -self.camera_x + screen.get_width() + entity.size/2
 			top = -self.camera_y - entity.size/2
 			bottom = -self.camera_y + screen.get_height() + entity.size/2
 			if left <= entity.x <= right and top <= entity.y <= bottom:
-				if entity.rect.collidepoint(self.camera_mouse()):
-					entity.draw_health(self.world)
+				# if entity.rect.collidepoint(self.camera_mouse()):
+				# 	entity.draw_health(self.world)
 				entity.draw(self.world)
 
 	def draw_selection_box(self):
@@ -197,6 +255,7 @@ class GameState(State):
 		self.draw_world()
 		#self.draw_neighbors()
 		self.draw_grid()
+		self.draw_enities_selected()
 		self.draw_entities()
 		screen.blit(self.world, (self.camera_x, self.camera_y))
 		self.draw_selection_box()
@@ -233,7 +292,7 @@ class GameState(State):
 
 	def update_entities(self):
 		for entity in self.entities:
-			entity.update(self.entities, self.tile_length, self.tiles)
+			entity.update(self.entities, self.tile_length, self.world_width, self.world_height, self.tiles)
 
 	def update(self):
 		self.frame += 1
