@@ -4,4 +4,5 @@ class Wall(Tile):
 
 	def setup(self):
 		self.blocked = True
-		self.color = (randrange(242, 252), randrange(206, 216), randrange(180, 190))
+		self.transparent = False
+		self.color = (255, 0, 0)

@@ -22,23 +22,24 @@ class Entity:
 		self.max_health = 100
 		self.current_health = 100
 		self.speed = 5
-		self.velocity_weight = 100
+		self.velocity_weight = 10000
 		self.acceleration_x = 0
 		self.acceleration_y = 0
 		self.velocity_x = 0
 		self.velocity_y = 0
-		self.separation_weight = 10000
+		self.separation_weight = 100
 		self.separation_x = 0
 		self.separation_y = 0
-		self.alignment_weight = 100
+		self.alignment_weight = 1
 		self.alignment_x = 0
 		self.alignment_y = 0
-		self.cohesion_weight = 100
+		self.cohesion_weight = 1
 		self.cohesion_x = 0
 		self.cohesion_y = 0
 		self.path = []
 		self.buttons = []
 		self.neighbor_radius = 2
+		self.light_radius = 6
 		self.setup()
 
 	def setup(self):
@@ -55,16 +56,17 @@ class Entity:
 
 	def get_neighbors(self, radius, world_width, world_height, tiles, length):
 		return_lst = []
-		for i in range(max(0, self.x/length - int(ceil(radius))), min(world_width, self.x/length + int(ceil(radius)))):
-			for j in range(max(0, self.y/length - int(ceil(radius))), min(world_height, self.y/length + int(ceil(radius)))):
-				entities = tiles[i][j].entities
+		left = max(0, self.x/length - int(ceil(radius)))
+		right = min(world_width, self.x/length + int(ceil(radius)))
+		top = max(0, self.y/length - int(ceil(radius)))
+		bottom = min(world_height, self.y/length + int(ceil(radius)))
+		for x in range(left, right):
+			for y in range(top, bottom):
+				entities = tiles[x][y].entities
 				for entity in entities:
 					if entity != self and sqrt((self.x - entity.x)**2 + (self.y - entity.y)**2) < radius*length:
 						return_lst.append(entity)
 		return return_lst
-
-	def darken(self, color, mag):
-		return (min(int(mag*color[0]), 255), min(int(mag*color[1]), 255), min(int(mag*color[2]), 255))
 
 	def weighted(self):
 		velocity_x = self.velocity_weight*self.velocity_x
@@ -173,95 +175,8 @@ class Entity:
 						frontier.insert(len(frontier), (neighbor, priority))
 						came_from[neighbor] = current
 
-	def draw_line_of_sight(self, grandparrent, child, tiles, length, screen):
-		dx = length*(grandparrent.x - child.x)
-		dy = length*(grandparrent.y - child.y)
-		#verticle intersections
-		if dy != 0:
-			if dx < 0:
-				x = child.x*length + length
-			elif dx > 0:
-				x = child.x*length - length
-			elif dx == 0:
-				x - child.x*length
-			#pointing up
-			if dy < 0:
-				y = child.y*length + length
-				Ya = -length
-			#pointing down
-			elif dy > 0:
-				y = child.y*length - length
-				Ya = length
-			while self.while_condition(y, length*grandparrent.y, Ya):
-				tiles[int(x/length)][int(y/length)].draw(screen, self.color, length)
-				display.update()
-				sleep(.05)
-				if tiles[int(x/length)][int(y/length)].blocked:
-					return False
-				y += Ya
-				x += float(dx)/dy*Ya
-		#horizontal intersections
-		if dx != 0:
-			if dy < 0:
-				y = child.y*length + length
-			elif dy > 0:
-				y = child.y*length - length
-			elif dy == 0:
-				y = child.y*length
-			#pointing left
-			if dx < 0:
-				x = child.x*length + length
-				Xa = -length
-			#pointing right
-			elif dx > 0:
-				x = child.x*length - length
-				Xa = length
-			while self.while_condition(x, length*grandparrent.x, Xa):
-				tiles[int(x/length)][int(y/length)].draw(screen, self.color, length)
-				display.update()
-				sleep(.05)
-				if tiles[int(x/length)][int(y/length)].blocked:
-					return False
-				x += Xa
-				y += float(dy)/dx*Xa
-		return True
-
-	def draw_pathfind(self, start, goal, world_height, world_width, tiles, length, screen):
-		frontier = []
-		frontier.append((start, 0))
-		came_from = {}
-		cost_so_far = {}
-		came_from[start] = None
-		cost_so_far[start] = 0
-		while frontier != []:
-			current = frontier[0][0]
-			frontier.pop(0)
-			if current == goal:
-				self.path = [current]
-				while came_from[current] != None:
-					current = came_from[current]
-					self.path.insert(0, current)
-				break
-			for neighbor in current.get_neighbors(world_height, world_width, tiles):
-				neighbor.draw(screen, self.color, length)
-				display.update()
-				if (neighbor not in cost_so_far or new_cost < cost_so_far[neighbor]) and not neighbor.blocked:
-					new_cost = cost_so_far[current] + len(neighbor.entities) + 1
-					cost_so_far[neighbor] = new_cost
-					priority = new_cost + self.heuristic(goal, neighbor)
-					flag = True
-					for i in range(len(frontier)):
-						if priority < frontier[i][1]:
-							flag = False
-							frontier.insert(i, (neighbor, priority))
-							if came_from[current] != None and self.line_of_sight(came_from[current], neighbor, tiles, length):
-								came_from[neighbor] = came_from[current]
-							else:
-								came_from[neighbor] = current
-							break
-					if flag:
-						frontier.insert(len(frontier), (neighbor, priority))
-						came_from[neighbor] = current			
+	def draw_attack(self, frame):
+		pass		
 
 	def draw_line_to_destination(self, screen):
 		if len(self.path) > 2:
@@ -278,24 +193,16 @@ class Entity:
 
 	def draw_path(self, screen, length):
 		for tile in self.path:
-			tile.draw(screen, self.darken(tile.color, 1.1), length)
+			tile.draw(screen, tile.darken(tile.color, 1.1), length)
 
 	def draw_selected(self, screen):
 		draw.circle(screen, (0, 255, 0), (self.x, self.y), 2*self.size/3, 1)
 
 	def draw(self, screen):
-		# try:
-		# 	direction = self.weighted_angle()
-		# 	right_x = self.x + self.size*cos(direction - pi/3)/2
-		# 	right_y = self.y + self.size*sin(direction - pi/3)/2
-		# 	forward_x = self.x + sqrt(3)*self.size*cos(direction)/2
-		# 	forward_y = self.y + sqrt(3)*self.size*sin(direction)/2
-		# 	left_x  = self.x + self.size*cos(direction + pi/3)/2
-		# 	left_y = self.y + self.size*sin(direction + pi/3)/2
-		# 	draw.polygon(screen, self.color, [(right_x, right_y), (forward_x, forward_y), (left_x, left_y)])
-		# except:
-		# 	pass
 		draw.circle(screen, self.color, (self.x, self.y), self.size/2)
+
+	def attack(self, frame):
+		pass
 
 	def update_velocity(self, length):
 		self.velocity_x = 0
@@ -308,7 +215,6 @@ class Entity:
 			else:
 				self.velocity_x = velocity_x
 				self.velocity_y = velocity_y
-		#print "velocity", self.velocity_x, self.velocity_y
 
 	def update_separation(self):
 		self.separation_x = 0
@@ -320,7 +226,6 @@ class Entity:
 			self.separation_y += self.y - entity.y
 		self.separation_x /= len(self.neighbors)
 		self.separation_y /= len(self.neighbors)
-		#print "separation", self.separation_x, self.separation_y
 
 	def update_alignment(self):
 		self.alignment_x = 0
@@ -332,7 +237,6 @@ class Entity:
 			self.alignment_y += entity.velocity_y
 		self.alignment_x /= len(self.neighbors)
 		self.alignment_y /= len(self.neighbors)
-		#print "alignment", self.alignment_x, self.alignment_y
 
 	def update_cohesion(self):
 		self.cohesion_x = 0
@@ -346,7 +250,6 @@ class Entity:
 		self.cohesion_y /= len(self.neighbors)
 		self.cohesion_x -= self.x
 		self.cohesion_y -= self.y
-		#print "cohesion", self.cohesion_x, self.cohesion_y
 
 	def update_location(self, world_width, world_height, length):
 		if 0 <= self.x + int(self.speed*self.weighted()[0]) <= world_width*length:
@@ -368,16 +271,17 @@ class Entity:
 	def update_neighbors(self):
 		pass
 
-	def update(self, entities, length, world_width, world_height, tiles):
+	def update(self, entities, length, tiles, frame):
 		x = self.x
 		y = self.y
 		self.rect = Rect(self.x - self.size/2, self.y - self.size/2, self.size, self.size)
-		self.neighbors = self.get_neighbors(self.neighbor_radius, world_width, world_height, tiles, length)
+		self.attack(frame)
+		self.neighbors = self.get_neighbors(self.neighbor_radius, len(tiles), len(tiles[0]), tiles, length)
 		self.update_velocity(length)
 		self.update_separation()
 		self.update_alignment()
 		self.update_cohesion()
-		self.update_location(world_width, world_height, length)
+		self.update_location(len(tiles), len(tiles[0]), length)
 		if self.x/length != x or self.y/length != y:
 			self.update_tiles(x, y, length, tiles)
 			self.update_neighbors()

@@ -26,19 +26,19 @@ class GameState(State):
 
 	def setup(self):
 		self.show_grid = False
-		self.show_world_available = True
+		self.show_world_available = False
 		self.move_camera = True
 		self.save = False
 		self.camera_x = 0
 		self.camera_y = 0
-		self.world_width = 100
-		self.world_height = 120
-		self.tile_length = 16
+		self.world_width = 200
+		self.world_height = 200
+		self.tile_length = 32
 		self.world = Surface((self.world_width*self.tile_length, self.world_height*self.tile_length))
 		self.tiles = [[Tile(x, y) for y in range(self.world_height)] for x in range(self.world_width)]
 		self.draw_world()
 		self.buttons = [Button(self.load, 16, 16), Button(self.toggle_save, 96, 16)]
-		self.entities = [Entity(self.tiles, 64*i, 64*i, self.tile_length) for i in range(1, 10)]
+		self.entities = [Entity(self.tiles, 64*i, 64*i, self.tile_length) for i in range(1, 2)]
 		self.click_x = None
 		self.click_y = None
 		self.selection_box = None
@@ -90,34 +90,26 @@ class GameState(State):
 
 	def click_began(self):
 		flag = True
-		#detect button click
 		for button in self.buttons:
 			if button.rect.collidepoint(mouse.get_pos()):
 				button.action()
 				flag = False
-		#detect entity click
 		for entity in self.entities:
 			if entity.rect.collidepoint(self.camera_mouse()):
 				self.entities_selected = [entity]
 				flag = False
 		if flag:
-			#self.tiles[self.camera_mouse_x()/64][self.camera_mouse_y()/64].blocked = not self.tiles[self.camera_mouse_x()/64][self.camera_mouse_y()/64].blocked
-			#self.entities_selected = []
 			(self.click_x, self.click_y) = mouse.get_pos()
 			self.selection_box = Rect(-1, -1, 0, 0)
 
 	def right_click_began(self):
-		#print "click frame:", self.frame
-		#set a destination and velocity for all entities
 		for entity in self.entities_selected:
 			start = self.tiles[entity.x/self.tile_length][entity.y/self.tile_length]
 			end = self.mouse_tile()
 			if end != None and not end.blocked:
 				entity.pathfind(start, end, self.world_height, self.world_width, self.tiles, self.tile_length)
-				#timer(entity.draw_line_of_sight, end, start, self.tiles, self.tile_length, screen)
 
 	def mouse_moved(self):
-		#update size of rectangle select
 		if (self.click_x, self.click_y) != (None, None):
 			width = self.mouse_x() - self.click_x
 			height = self.mouse_y() - self.click_y
@@ -134,7 +126,6 @@ class GameState(State):
 			self.entities_selected = [self.entities[i] for i in rect.collidelistall(self.entities)]
 
 	def click_ended(self):
-		#select all in rectangle select and then delete rectangle
 		if (self.click_x, self.click_y) != (None, None):
 			if self.selection_box != None:
 				self.selection_box = None
@@ -183,7 +174,43 @@ class GameState(State):
 			self.entities_selected9 = self.entities_selected
 		if not keys[K_LCTRL] and keys[K_9] and self.entities_selected9 != []:
 			self.entities_selected = self.entities_selected9
-		
+
+	def on_screen(self, tile):
+		top = max(0, -self.camera_y/self.tile_length - 1)
+		bottom = min(self.world_height, (-self.camera_y + screen.get_height())/self.tile_length + 1)
+		left = max(0, -self.camera_x/self.tile_length - 1)
+		right = min(self.world_width, (-self.camera_x + screen.get_width())/self.tile_length + 1)
+		return left < tile.x < right and top < tile.y < bottom
+
+	def light_level(self, start, end):
+		return sqrt((end.x - start.x)**2 + (end.y - start.y)**2)
+
+	def draw_FOV(self): 
+		light_level = {}
+		for entity in self.entities:
+			start = self.tiles[entity.x/self.tile_length][entity.y/self.tile_length]
+			frontier = []
+			frontier.append(start)
+			light_level[start] = entity.light_radius
+			cost_so_far = {}
+			cost_so_far[start] = 0
+			while frontier != []:
+				current = frontier[0]
+				frontier.pop(0)
+				for neighbor in current.get_neighbors(self.world_width, self.world_height, self.tiles):
+					neighbor_light_level = entity.light_radius - self.light_level(start, neighbor)
+					on_screen = self.on_screen(neighbor)
+					compare_light_level = neighbor not in light_level or light_level[neighbor] < neighbor_light_level
+					tile_is_see_through = neighbor.transparent
+					within_light_radius = cost_so_far[current] + 1 < entity.light_radius
+					not_going_up_a_level = neighbor.level <= start.level
+					if on_screen and compare_light_level and tile_is_see_through and within_light_radius and not_going_up_a_level:
+						cost_so_far[neighbor] = cost_so_far[current] + sqrt((neighbor.x - start.x)**2 + (neighbor.y - start.y)**2)/entity.light_radius
+						neighbor.draw(self.world, neighbor.darken(neighbor.color, .9 + .1*neighbor_light_level), self.tile_length)
+						light_level[neighbor] = neighbor_light_level
+						frontier.append(neighbor)
+					if not neighbor.seen:
+						neighbor.seen = True
 
 	def draw_world(self):
 		top = max(0, -self.camera_y/self.tile_length - 1)
@@ -192,12 +219,12 @@ class GameState(State):
 		right = min(self.world_width, (-self.camera_x + screen.get_width())/self.tile_length + 1)
 		for x in range(left, right):
 			for y in range(top, bottom):
-				if self.show_world_available and self.tiles[x][y].blocked == True:
+				if self.show_world_available and self.tiles[x][y].blocked:# and self.tiles[x][y].seen:
 					rect = Rect(self.tile_length*x, self.tile_length*y, self.tile_length, self.tile_length)
-					draw.rect(self.world, (255, 100, 100), rect)
-				else:
+					draw.rect(self.world, darken((255, 100, 100), .9), rect)
+				elif self.tiles[x][y].seen:
 					tile = self.tiles[x][y]
-					tile.draw(self.world, tile.color, self.tile_length)
+					tile.draw(self.world, tile.darken(tile.color, .7), self.tile_length)
 
 	def draw_grid(self):
 		if self.show_grid:
@@ -213,29 +240,25 @@ class GameState(State):
 
 	def draw_enities_selected(self):
 		for entity in self.entities_selected:
-			entity.draw_selected(self.world)
-
-	def draw_entities(self):
-		for entity in self.entities:
-			#entity.draw_line_to_destination(self.world)
-			#entity.draw_path(self.world, self.tile_length)
-			#entity.draw_angles(self.world)
 			left = -self.camera_x - entity.size/2
 			right = -self.camera_x + screen.get_width() + entity.size/2
 			top = -self.camera_y - entity.size/2
 			bottom = -self.camera_y + screen.get_height() + entity.size/2
 			if left <= entity.x <= right and top <= entity.y <= bottom:
-				# if entity.rect.collidepoint(self.camera_mouse()):
-				# 	entity.draw_health(self.world)
+				entity.draw_selected(self.world)
+
+	def draw_entities(self):
+		for entity in self.entities:
+			left = -self.camera_x - entity.size/2
+			right = -self.camera_x + screen.get_width() + entity.size/2
+			top = -self.camera_y - entity.size/2
+			bottom = -self.camera_y + screen.get_height() + entity.size/2
+			if left <= entity.x <= right and top <= entity.y <= bottom:
 				entity.draw(self.world)
 
 	def draw_selection_box(self):
 		if self.selection_box != None:
 			draw.rect(screen, (100, 255, 100), self.selection_box, 5)
-
-	def draw_map(self):
-		for entity in self.entities:
-			screen.set_at((entity.x/64, entity.y/64 + screen.get_height() - 256), entity.color)
 
 	def draw_buttons(self):
 		for button in self.buttons:
@@ -245,21 +268,14 @@ class GameState(State):
 			else:
 				button.draw(screen, button.color)
 
-	def draw_neighbors(self):
-		tile = self.tiles[self.camera_mouse_x()/self.tile_length][self.camera_mouse_y()/self.tile_length]
-		for neighbor in tile.get_neighbors():
-			rect = Rect(neighbor.x*self.tile_length, neighbor.y*self.tile_length, self.tile_length, self.tile_length)
-			draw.rect(self.world, (0, 0, 0), rect)
-
 	def draw(self):
 		self.draw_world()
-		#self.draw_neighbors()
+		self.draw_FOV()
 		self.draw_grid()
 		self.draw_enities_selected()
 		self.draw_entities()
 		screen.blit(self.world, (self.camera_x, self.camera_y))
 		self.draw_selection_box()
-		#self.draw_map()
 		self.draw_buttons()
 		display.update()
 
@@ -284,21 +300,14 @@ class GameState(State):
 				continue
 			i += 1
 
-	def update_buttons(self):
-		if self.entities_selected != []:
-			self.buttons = self.entities_selected[0].buttons
-		else:
-			self.buttons = []
-
 	def update_entities(self):
 		for entity in self.entities:
-			entity.update(self.entities, self.tile_length, self.world_width, self.world_height, self.tiles)
+			entity.update(self.entities, self.tile_length, self.tiles, self.frame)
 
 	def update(self):
 		self.frame += 1
 		self.update_camera()
 		self.kill_dead_entities()
-		#self.update_buttons()
 		self.update_entities()
 
 	def stop(self):
