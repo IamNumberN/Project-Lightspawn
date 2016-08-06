@@ -89,11 +89,6 @@ class State():
 					self.right_click_ended()
 			if evnt.type == MOUSEMOTION:
 				self.mouse_moved()
-			# if evnt.type == ACTIVEEVENT:
-			# 	if evnt.state == 2 and evnt.gain == 0:
-			# 		self.minimize()
-			# 	if evnt.state == 2 and evnt.gain == 1:
-			# 		self.maximize()
 			if evnt.type == KEYDOWN:
 				if evnt.key == K_ESCAPE:
 					self.stop()
@@ -114,7 +109,7 @@ class State():
 			self.handle_draw(screen)
 			d = time()
 			self.tick()	
-			# with open("data.csv", "a") as csvfile:
-			# 	write = writer(csvfile)
-			# 	write.writerow([d - a])
+			with open("data.csv", "a") as csvfile:
+				write = writer(csvfile)
+				write.writerow([d - a])
 			# print "frame:", self.frame, "handle events:", b - a, "update:", c - b, "draw:", d - c, "total:", d - a

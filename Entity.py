@@ -21,13 +21,14 @@ class Entity:
 		self.rect = Rect(self.x - self.size/2, self.y - self.size/2, self.size, self.size)
 		self.max_health = 100
 		self.current_health = 100
+
 		self.speed = 5
-		self.velocity_weight = 10000
+		self.velocity_weight = 10
 		self.acceleration_x = 0
 		self.acceleration_y = 0
 		self.velocity_x = 0
 		self.velocity_y = 0
-		self.separation_weight = 100
+		self.separation_weight = 1000
 		self.separation_x = 0
 		self.separation_y = 0
 		self.alignment_weight = 1
@@ -37,9 +38,14 @@ class Entity:
 		self.cohesion_x = 0
 		self.cohesion_y = 0
 		self.path = []
+
 		self.buttons = []
 		self.neighbor_radius = 2
-		self.light_radius = 6
+		self.light_radius = 8
+		self.attack_radius = 6
+		self.side = 0
+		self.command_queue = []
+		self.update_neighbors(tiles, length)
 		self.setup()
 
 	def setup(self):
@@ -109,7 +115,7 @@ class Entity:
 			elif dy > 0:
 				y = child.y*length - length
 				Ya = length
-			while self.while_condition(y, length*grandparrent.y, Ya):
+			while self.while_condition(y, length*grandparrent.y, Ya):#and within screen
 				if tiles[int(x/length)][int(y/length)].blocked:
 					return False
 				y += Ya
@@ -148,8 +154,7 @@ class Entity:
 		came_from[start] = None
 		cost_so_far[start] = 0
 		while frontier != []:
-			current = frontier[0][0]
-			frontier.pop(0)
+			current = frontier.pop(0)[0]
 			if current == goal:
 				self.path = [current]
 				while came_from[current] != None:
@@ -175,25 +180,8 @@ class Entity:
 						frontier.insert(len(frontier), (neighbor, priority))
 						came_from[neighbor] = current
 
-	def draw_attack(self, frame):
-		pass		
-
-	def draw_line_to_destination(self, screen):
-		if len(self.path) > 2:
-			for i in range(len(self.path)):
-				if i == 0:
-					draw.line(screen, (100, 255, 100), (self.x, self.y), self.path[0])
-				else:
-					draw.line(screen, (100, 255, 100), self.path[i], self.path[i - 1])
-
-	def draw_health(self, screen):
-		offset = (self.x - self.size/2 - (self.max_health - self.rect.width)/2, self.y - self.size/2 - 64)
-		draw.rect(screen, (0, 0, 0), Rect(offset, (self.max_health, 32)))
-		draw.rect(screen, (0, 255, 0), Rect(offset, (self.current_health, 32)))
-
-	def draw_path(self, screen, length):
-		for tile in self.path:
-			tile.draw(screen, tile.darken(tile.color, 1.1), length)
+	def keys(self):
+		pass
 
 	def draw_selected(self, screen):
 		draw.circle(screen, (0, 255, 0), (self.x, self.y), 2*self.size/3, 1)
@@ -201,20 +189,12 @@ class Entity:
 	def draw(self, screen):
 		draw.circle(screen, self.color, (self.x, self.y), self.size/2)
 
-	def attack(self, frame):
-		pass
-
 	def update_velocity(self, length):
 		self.velocity_x = 0
 		self.velocity_y = 0
 		if self.path != []:
-			velocity_x = self.path[0].x*length + length/2 - self.x
-			velocity_y = self.path[0].y*length + length/2 - self.y
-			if sqrt(velocity_x**2 + velocity_y**2) < self.speed:
-				self.path.pop(0)
-			else:
-				self.velocity_x = velocity_x
-				self.velocity_y = velocity_y
+			self.velocity_x = self.path[0].x*length + length/2 - self.x
+			self.velocity_y = self.path[0].y*length + length/2 - self.y
 
 	def update_separation(self):
 		self.separation_x = 0
@@ -268,20 +248,49 @@ class Entity:
 		world_y = (self.y - self.size/2)/length
 		tiles[world_x][world_y].entities.append(self)
 
-	def update_neighbors(self):
+	def update_neighbors(self, tiles, length):
+		self.neighbors = self.get_neighbors(self.neighbor_radius, len(tiles), len(tiles[0]), tiles, length)
+
+	def move(self, frame, tile):
+		pass
+		#if the tile is seen then pathfind to it
+
+	def attack(self, frame, entity):
+		pass
+		#if the entity is within my FOV if it is within my rnage of attack then attack else do breath first seach for a valid position to attack
+
+	def attack_move(self, frame, entity):
+		pass
+		#
+
+	def hold(self):
+		pass
+		#if the entity is within my range of attack then attack
+
+	def patrol(self, frame, tile):
+		pass
+		#create path from my current tile to the tile parameter if the entity is
+
+	def follow(self, frame, entity):
 		pass
 
 	def update(self, entities, length, tiles, frame):
-		x = self.x
-		y = self.y
-		self.rect = Rect(self.x - self.size/2, self.y - self.size/2, self.size, self.size)
-		self.attack(frame)
-		self.neighbors = self.get_neighbors(self.neighbor_radius, len(tiles), len(tiles[0]), tiles, length)
-		self.update_velocity(length)
-		self.update_separation()
-		self.update_alignment()
-		self.update_cohesion()
-		self.update_location(len(tiles), len(tiles[0]), length)
-		if self.x/length != x or self.y/length != y:
-			self.update_tiles(x, y, length, tiles)
-			self.update_neighbors()
+		# x = self.x
+		# y = self.y
+		# self.rect = Rect(self.x - self.size/2, self.y - self.size/2, self.size, self.size)
+
+		# self.update_velocity(length)
+		# self.update_separation()
+		# self.update_alignment()
+		# self.update_cohesion()
+		# self.update_location(len(tiles), len(tiles[0]), length)
+
+		# if self.x/length != x or self.y/length != y:
+		# 	self.update_tiles(x, y, length, tiles)
+		# 	self.update_neighbors(tiles, length)
+		if self.command_queue == []:
+			for entity in entities:
+				if entity.side != self.side:
+					self.command_queue = [(self.attack, (self.frame, entity))]
+		else:
+			self.command_queue[0][0](*self.command_queue[0][1])
