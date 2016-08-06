@@ -96,6 +96,9 @@ class Entity:
 		elif direction > 0:
 			return var < other_var
 
+	def click_began(self):
+		pass
+
 	def line_of_sight(self, grandparrent, child, tiles, length):
 		dx = length*(grandparrent.x - child.x)
 		dy = length*(grandparrent.y - child.y)
@@ -144,9 +147,9 @@ class Entity:
 		return True
 
 	def pathfind(self, start, goal, world_height, world_width, tiles, length):
-		if self.line_of_sight(start, goal, tiles, length):
-			self.path = [goal]
-			return
+		# if self.line_of_sight(start, goal, tiles, length):
+		# 	self.path = [goal]
+		# 	return
 		frontier = []
 		frontier.append((start, 0))
 		came_from = {}
@@ -251,9 +254,24 @@ class Entity:
 	def update_neighbors(self, tiles, length):
 		self.neighbors = self.get_neighbors(self.neighbor_radius, len(tiles), len(tiles[0]), tiles, length)
 
-	def move(self, frame, tile):
-		pass
-		#if the tile is seen then pathfind to it
+	#if the tile is seen then pathfind to it
+	def move(self, frame, tile, tiles, length):
+		# if frame%20 == 0:
+		# 	self.pathfind(tiles[self.x/length][self.y/length], tile, world_height, world_width, tiles, length)
+		if tiles[self.x/length][self.y/length] == tile:
+			del self.command_queue[0]
+			return
+		x = self.x
+		y = self.y
+		self.rect = Rect(self.x - self.size/2, self.y - self.size/2, self.size, self.size)
+		self.update_velocity(length)
+		self.update_separation()
+		self.update_alignment()
+		self.update_cohesion()
+		self.update_location(len(tiles), len(tiles[0]), length)
+		if self.x/length != x or self.y/length != y:
+			self.update_tiles(x, y, length, tiles)
+			self.update_neighbors(tiles, length)
 
 	def attack(self, frame, entity):
 		pass

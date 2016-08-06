@@ -35,9 +35,9 @@ class GameState(State):
 		self.tile_length = 32
 		self.world = Surface((self.world_width*self.tile_length, self.world_height*self.tile_length))
 		self.tiles = [[Tile(x, y) for y in range(self.world_height)] for x in range(self.world_width)]
-		self.draw_world()
+		#self.draw_world()
 		self.buttons = [Button(self.load, 16, 16), Button(self.toggle_save, 64, 16), Button(self.zoom_in, 112, 16), Button(self.zoom_out, 160, 16)]
-		self.entities = [Entity(self.tiles, 200*i, 200*i, self.tile_length) for i in range(1, 30)]
+		self.entities = [Entity(self.tiles, 200*i, 200*i, self.tile_length) for i in range(1, 10)]
 		self.click_x = None
 		self.click_y = None
 		self.selection_box = None
@@ -181,11 +181,21 @@ class GameState(State):
 				else:
 					for entity in self.entities_selected:
 						entity.command_queue = [entity.follow, (self.frame, entity)]
-		for entity in self.entities_selected:
-			start = self.tiles[entity.x/self.tile_length][entity.y/self.tile_length]
-			end = self.mouse_tile()
-			if end != None and not end.blocked:
-				entity.pathfind(start, end, self.world_height, self.world_width, self.tiles, self.tile_length)
+		if self.mouse_tile() != None:
+			if keys[K_LSHIFT]:
+				for selected_entity in self.entities_selected:
+					start = self.tiles[selected_entity.x/self.tile_length][selected_entity.y/self.tile_length]
+					end = self.mouse_tile()
+					if end != None and not end.blocked:
+						selected_entity.pathfind(start, end, self.world_height, self.world_width, self.tiles, self.tile_length)
+					selected_entity.command_queue.append(selected_entity.move, (self.frame, self.mouse_tile(), self.tiles, self.tile_length))
+			else:
+				for selected_entity in self.entities_selected:
+					start = self.tiles[selected_entity.x/self.tile_length][selected_entity.y/self.tile_length]
+					end = self.mouse_tile()
+					if end != None and not end.blocked:
+						selected_entity.pathfind(start, end, self.world_height, self.world_width, self.tiles, self.tile_length)
+					selected_entity.command_queue = [(selected_entity.move, (self.frame, self.mouse_tile(), self.tiles, self.tile_length))]
 
 	#if we are trying to select entities then adjust the size to our selection box
 	def mouse_moved(self):
@@ -261,12 +271,12 @@ class GameState(State):
 	#for each entity do a breath first search on valid neighbors to draw field of view. allow peaking past corners
 	def draw_FOV(self):
 		self.light_level = {}
-		top = max(0, -self.camera_y/self.tile_length - 1 - entity.light_radius)
-		bottom = min(self.world_height, (-self.camera_y + screen.get_height())/self.tile_length + 1 + entity.light_radius)
-		left = max(0, -self.camera_x/self.tile_length - 1 - entity.light_radius)
-		right = min(self.world_width, (-self.camera_x + screen.get_width())/self.tile_length + 1 + entity.light_radius)
 		for entity in self.entities:
 			start = self.tiles[entity.x/self.tile_length][entity.y/self.tile_length]
+			top = max(0, -self.camera_y/self.tile_length - 1 - entity.light_radius)
+			bottom = min(self.world_height, (-self.camera_y + screen.get_height())/self.tile_length + 1 + entity.light_radius)
+			left = max(0, -self.camera_x/self.tile_length - 1 - entity.light_radius)
+			right = min(self.world_width, (-self.camera_x + screen.get_width())/self.tile_length + 1 + entity.light_radius)
 			start.draw(self.world, start.color, self.tile_length)
 			if top < start.y < bottom and left < start.x < right:
 				top = max(0, -self.camera_y/self.tile_length - 1)
@@ -297,9 +307,9 @@ class GameState(State):
 		right = min(self.world_width, (-self.camera_x + screen.get_width())/self.tile_length + 1)
 		for x in range(left, right):
 			for y in range(top, bottom):
-				if self.tiles[x][y].seen and self.tiles[x][y] not in self.light_level:
-					tile = self.tiles[x][y]
-					self.tiles[x][y].draw(self.world, tile.darken(tile.color, .5), self.tile_length)
+				#if self.tiles[x][y].seen and self.tiles[x][y] not in self.light_level:
+				tile = self.tiles[x][y]
+				self.tiles[x][y].draw(self.world, tile.darken(tile.color, .5), self.tile_length)
 
 	#for every tile for every entity cast a ray and draw if it doesn't intersect(super inefficent won't be used)
 	def ray_cast_draw_world(self):
@@ -331,14 +341,20 @@ class GameState(State):
 	def calculate_FOV(self):
 		self.light_level = {}
 		for entity in self.entities:
-			self.recursive_draw_world(1, 1, 0, 0, 1, 1, 0, entity.x/self.tile_length, entity.y/self.tile_length, entity.light_radius)
-			self.recursive_draw_world(1, 1, 0, 1, 0, 0, 1, entity.x/self.tile_length, entity.y/self.tile_length, entity.light_radius)
-			self.recursive_draw_world(1, 1, 0, 0, -1, 1, 0, entity.x/self.tile_length, entity.y/self.tile_length, entity.light_radius)
-			self.recursive_draw_world(1, 1, 0, -1, 0, 0, 1, entity.x/self.tile_length, entity.y/self.tile_length, entity.light_radius)
-			self.recursive_draw_world(1, 1, 0, 0, 1, -1, 0, entity.x/self.tile_length, entity.y/self.tile_length, entity.light_radius)
-			self.recursive_draw_world(1, 1, 0, 1, 0, 0, -1, entity.x/self.tile_length, entity.y/self.tile_length, entity.light_radius)
-			self.recursive_draw_world(1, 1, 0, 0, -1, -1, 0, entity.x/self.tile_length, entity.y/self.tile_length, entity.light_radius)
-			self.recursive_draw_world(1, 1, 0, -1, 0, 0, -1, entity.x/self.tile_length, entity.y/self.tile_length, entity.light_radius)
+			start = self.tiles[entity.x/self.tile_length][entity.y/self.tile_length]
+			entity_top = max(0, -self.camera_y/self.tile_length - 1 - entity.light_radius)
+			entity_bottom = min(self.world_height, (-self.camera_y + screen.get_height())/self.tile_length + 1 + entity.light_radius)
+			entity_left = max(0, -self.camera_x/self.tile_length - 1 - entity.light_radius)
+			entity_right = min(self.world_width, (-self.camera_x + screen.get_width())/self.tile_length + 1 + entity.light_radius)
+			if entity_top < start.y < entity_bottom and entity_left < start.x < entity_right:
+				self.recursive_draw_world(1, 1, 0, 0, 1, 1, 0, entity.x/self.tile_length, entity.y/self.tile_length, entity.light_radius)
+				self.recursive_draw_world(1, 1, 0, 1, 0, 0, 1, entity.x/self.tile_length, entity.y/self.tile_length, entity.light_radius)
+				self.recursive_draw_world(1, 1, 0, 0, -1, 1, 0, entity.x/self.tile_length, entity.y/self.tile_length, entity.light_radius)
+				self.recursive_draw_world(1, 1, 0, -1, 0, 0, 1, entity.x/self.tile_length, entity.y/self.tile_length, entity.light_radius)
+				self.recursive_draw_world(1, 1, 0, 0, 1, -1, 0, entity.x/self.tile_length, entity.y/self.tile_length, entity.light_radius)
+				self.recursive_draw_world(1, 1, 0, 1, 0, 0, -1, entity.x/self.tile_length, entity.y/self.tile_length, entity.light_radius)
+				self.recursive_draw_world(1, 1, 0, 0, -1, -1, 0, entity.x/self.tile_length, entity.y/self.tile_length, entity.light_radius)
+				self.recursive_draw_world(1, 1, 0, -1, 0, 0, -1, entity.x/self.tile_length, entity.y/self.tile_length, entity.light_radius)
 
 	#recursive function that implements FOV using shadowcasting
 	def recursive_draw_world(self, row, start, end, xx, xy, yx, yy, startx, starty, radius):
@@ -349,12 +365,12 @@ class GameState(State):
 		for distance in range(row, radius):
 			if not blocked:
 				dy = - distance
-				for dx in range(-distance, 0):
+				for dx in range(-distance, 1):
 					currentx = startx + dx*xx + dy*xy
 					currenty = starty + dx*yx + dy*yy
 					left_slope = (dx - .5)/(dy + .5)
 					right_slope = (dx + .5)/(dy - .5)
-					if not (currentx >= 0 and currenty >= 0 and currentx < self.world_width and currenty < self.world_height) or start < right_slope:
+					if not (0 <= currentx < self.world_width and 0 <= currenty < self.world_height) or start < right_slope:
 						continue
 					elif end > left_slope:
 						break
@@ -370,7 +386,7 @@ class GameState(State):
 						else:
 							blocked = False
 							start = new_start
-					elif self.tiles[currentx][currenty].transparent >= 1 and distance < radius:
+					elif not self.tiles[currentx][currenty].transparent and distance < radius:
 						blocked = True
 						self.recursive_draw_world(distance + 1, start, left_slope, xx, xy, yx, yy, startx, starty, radius)
 						new_start = right_slope
@@ -421,8 +437,8 @@ class GameState(State):
 	def draw(self):
 		# timer(self.draw_FOV)
 		# timer(self.draw_world)
-		#timer(self.ray_cast_draw_world)
-		self.calculate_FOV()
+		# timer(self.ray_cast_draw_world)
+		timer(self.calculate_FOV)
 		self.draw_grid()
 		self.draw_enities_selected()
 		self.draw_entities()
