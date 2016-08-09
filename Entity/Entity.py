@@ -87,7 +87,7 @@ class Entity:
 		y = velocity_y + separation_y + alignment_y + cohesion_y
 		return self.normalize((x, y), 1)
 
-	def heuristic(self, goal, next):
+	def distance(self, goal, next):
 		return sqrt((goal.x - next.x)**2 + (goal.y - next.y)**2)
 
 	def while_condition(self, var, other_var, direction):
@@ -147,9 +147,9 @@ class Entity:
 		return True
 
 	def pathfind(self, start, goal, world_height, world_width, tiles, length):
-		if self.line_of_sight(start, goal, tiles, length):
-			self.path = [goal]
-			return
+		# if self.line_of_sight(start, goal, tiles, length):
+		# 	self.path = [goal]
+		# 	return
 		frontier = []
 		frontier.append((start, 0))
 		came_from = {}
@@ -165,23 +165,23 @@ class Entity:
 					self.path.insert(0, current)
 				break
 			for neighbor in current.get_neighbors(world_height, world_width, tiles):
-				if (neighbor not in cost_so_far or new_cost < cost_so_far[neighbor]) and not neighbor.blocked:
+				if came_from[current] != None and self.line_of_sight(came_from[current], neighbor, tiles, length):
+					came_from[neighbor] = came_from[current]
+					new_cost = cost_so_far[came_from[current]] + len(neighbor.entities) + self.distance(came_from[current], neighbor)
+				else:
+					came_from[neighbor] = current
 					new_cost = cost_so_far[current] + len(neighbor.entities) + 1
+				if (neighbor not in cost_so_far or new_cost < cost_so_far[neighbor]) and not neighbor.blocked:
 					cost_so_far[neighbor] = new_cost
-					priority = new_cost + self.heuristic(goal, neighbor)
+					priority = new_cost + self.distance(goal, neighbor)
 					flag = True
 					for i in range(len(frontier)):
 						if priority < frontier[i][1]:
 							flag = False
 							frontier.insert(i, (neighbor, priority))
-							if came_from[current] != None and self.line_of_sight(came_from[current], neighbor, tiles, length):
-								came_from[neighbor] = came_from[current]
-							else:
-								came_from[neighbor] = current
 							break
 					if flag:
 						frontier.insert(len(frontier), (neighbor, priority))
-						came_from[neighbor] = current
 
 	def keys(self):
 		pass
@@ -293,22 +293,9 @@ class Entity:
 		pass
 
 	def update(self, entities, length, tiles, frame):
-		# x = self.x
-		# y = self.y
-		# self.rect = Rect(self.x - self.size/2, self.y - self.size/2, self.size, self.size)
-
-		# self.update_velocity(length)
-		# self.update_separation()
-		# self.update_alignment()
-		# self.update_cohesion()
-		# self.update_location(len(tiles), len(tiles[0]), length)
-
-		# if self.x/length != x or self.y/length != y:
-		# 	self.update_tiles(x, y, length, tiles)
-		# 	self.update_neighbors(tiles, length)
 		if self.command_queue == []:
 			for entity in entities:
-				if entity.side != self.side:
+				if entity.side != self.side and self.distance(self, entity) < self.attack_radius:
 					self.command_queue = [(self.attack, (self.frame, entity))]
 		else:
 			self.command_queue[0][0](*self.command_queue[0][1])
