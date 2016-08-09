@@ -147,9 +147,9 @@ class Entity:
 		return True
 
 	def pathfind(self, start, goal, world_height, world_width, tiles, length):
-		# if self.line_of_sight(start, goal, tiles, length):
-		# 	self.path = [goal]
-		# 	return
+		if self.line_of_sight(start, goal, tiles, length):
+			self.path = [goal]
+			return
 		frontier = []
 		frontier.append((start, 0))
 		came_from = {}

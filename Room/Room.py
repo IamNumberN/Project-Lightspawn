@@ -1,3 +1,5 @@
+from Tile import *
+
 class Room:
 
 	def __init__(self):

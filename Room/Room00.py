@@ -1,7 +1,5 @@
 from Room import *
-from Wall_tile import *
-from Tiles import *
-from Spike_tile import *
+from Tile import *
 
 class Room00(Room):
 

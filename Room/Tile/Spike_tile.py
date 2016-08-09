@@ -1,4 +1,4 @@
-from Tiles import *
+from Tile import *
 
 class Spike(Tile):
 

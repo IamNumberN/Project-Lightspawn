@@ -1,8 +1,7 @@
 from Entity import *
-from Tiles import *
 from State import *
 from Button import *
-from Room00 import *
+from Room import *
 from pygame import *
 from pygame.locals import *
 from sys import *
@@ -11,10 +10,6 @@ from random import *
 from time import *
 from csv import *
 from pickle import *
-
-def change_state(delete, create):
-	del delete
-	new = create()
 
 def timer(function, *args):
 		start = time()
@@ -356,14 +351,14 @@ class GameState(State):
 			entity_right = min(self.world_width, (-self.camera_x + screen.get_width())/self.tile_length + 1 + entity.light_radius)
 			#print entity_top, entity_bottom, entity_left, entity_right
 			if entity_top < start.y < entity_bottom and entity_left < start.x < entity_right:
-				self.recursive_draw_world(0, 1., 0, 0, 1, 1, 0, entity.x/self.tile_length, entity.y/self.tile_length, entity.light_radius)
-				self.recursive_draw_world(0, 1., 0, 1, 0, 0, 1, entity.x/self.tile_length, entity.y/self.tile_length, entity.light_radius)
-				self.recursive_draw_world(0, 1., 0, 0, -1, 1, 0, entity.x/self.tile_length, entity.y/self.tile_length, entity.light_radius)
-				self.recursive_draw_world(0, 1., 0, -1, 0, 0, 1, entity.x/self.tile_length, entity.y/self.tile_length, entity.light_radius)
-				self.recursive_draw_world(0, 1., 0, 0, 1, -1, 0, entity.x/self.tile_length, entity.y/self.tile_length, entity.light_radius)
-				self.recursive_draw_world(0, 1., 0, 1, 0, 0, -1, entity.x/self.tile_length, entity.y/self.tile_length, entity.light_radius)
-				self.recursive_draw_world(0, 1., 0, 0, -1, -1, 0, entity.x/self.tile_length, entity.y/self.tile_length, entity.light_radius)
-				self.recursive_draw_world(0, 1., 0, -1, 0, 0, -1, entity.x/self.tile_length, entity.y/self.tile_length, entity.light_radius)
+				self.recursive_draw_world(0, 1, 0, 0, 1, 1, 0, entity.x/self.tile_length, entity.y/self.tile_length, entity.light_radius)
+				self.recursive_draw_world(0, 1, 0, 1, 0, 0, 1, entity.x/self.tile_length, entity.y/self.tile_length, entity.light_radius)
+				self.recursive_draw_world(0, 1, 0, 0, -1, 1, 0, entity.x/self.tile_length, entity.y/self.tile_length, entity.light_radius)
+				self.recursive_draw_world(0, 1, 0, -1, 0, 0, 1, entity.x/self.tile_length, entity.y/self.tile_length, entity.light_radius)
+				self.recursive_draw_world(0, 1, 0, 0, 1, -1, 0, entity.x/self.tile_length, entity.y/self.tile_length, entity.light_radius)
+				self.recursive_draw_world(0, 1, 0, 1, 0, 0, -1, entity.x/self.tile_length, entity.y/self.tile_length, entity.light_radius)
+				self.recursive_draw_world(0, 1, 0, 0, -1, -1, 0, entity.x/self.tile_length, entity.y/self.tile_length, entity.light_radius)
+				self.recursive_draw_world(0, 1, 0, -1, 0, 0, -1, entity.x/self.tile_length, entity.y/self.tile_length, entity.light_radius)
 		for tile in self.light_level:
 			tile.draw(self.world, tile.darken(tile.color, self.light_level[tile]), self.tile_length)
 		#print self.a
