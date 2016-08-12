@@ -2,6 +2,14 @@ from pygame import *
 from math import *
 from random import *
 from time import *
+from Pause import *
+
+blue = (0, 0, 255)
+red = (255, 0, 0)
+green = (0, 255, 0)
+
+def rando():
+	return (randrange(255), randrange(255), randrange(255))
 
 def timer(function, *args):
 		start = time()
@@ -9,6 +17,16 @@ def timer(function, *args):
 		end = time()
 		print function.__name__, ":", end - start
 		return ret
+
+def stop_until_click():
+	run = True
+	while run:
+		for evnt in event.get():
+			if evnt.type == MOUSEBUTTONDOWN:
+				run = False
+			if evnt.type == QUIT:
+				import sys
+				sys.exit()
 
 class Entity:
 
@@ -21,6 +39,8 @@ class Entity:
 		self.rect = Rect(self.x - self.size/2, self.y - self.size/2, self.size, self.size)
 		self.max_health = 100
 		self.current_health = 100
+		self.max_energy = 100
+		self.current_energy = 100
 
 		self.speed = 5
 		self.velocity_weight = 100
@@ -87,69 +107,97 @@ class Entity:
 		y = velocity_y + separation_y + alignment_y + cohesion_y
 		return self.normalize((x, y), 1)
 
-	def distance(self, goal, next):
+	def heuristic(self, goal, next):
 		return sqrt((goal.x - next.x)**2 + (goal.y - next.y)**2)
 
-	def while_condition(self, var, other_var, direction):
-		if direction < 0:
-			return var > other_var
-		elif direction > 0:
-			return var < other_var
+	def distance(self, start, end):
+		return sqrt(start**2 + end**2)
 
 	def click_began(self):
 		pass
 
-	def line_of_sight(self, grandparrent, child, tiles, length):
-		dx = length*(grandparrent.x - child.x)
-		dy = length*(grandparrent.y - child.y)
-		#verticle intersections
-		if dy != 0:
-			if dx < 0:
-				x = child.x*length + length
-			elif dx > 0:
-				x = child.x*length - length
-			elif dx == 0:
-				x = child.x*length
-			#pointing up
-			if dy < 0:
-				y = child.y*length + length
-				Ya = -length
-			#pointing down
-			elif dy > 0:
-				y = child.y*length - length
-				Ya = length
-			while self.while_condition(y, length*grandparrent.y, Ya):#and within screen
-				if tiles[int(x/length)][int(y/length)].blocked:
-					return False
-				y += Ya
-				x += float(dx)/dy*Ya
-		#horizontal intersections
+	def line_of_sight_tile_to_tile(self, screen, start, end, tiles, length):
+		if start != end:
+			dx = float(start.x - end.x)
+			dy = float(start.y - end.y)
+			line1_start_x = (start.x + .5)*length + self.size/2*dy/self.distance(dx, dy)#use self.normalize
+			line1_start_y = (start.y + .5)*length - self.size/2*dx/self.distance(dx, dy)
+			line1_end_x = (end.x + .5)*length + self.size/2*dy/self.distance(dx, dy)
+			line1_end_y = (end.y + .5)*length - self.size/2*dx/self.distance(dx, dy)
+			line2_start_x = (start.x + .5)*length - self.size/2*dy/self.distance(dx, dy)
+			line2_start_y = (start.y + .5)*length + self.size/2*dx/self.distance(dx, dy)
+			line2_end_x = (end.x + .5)*length - self.size/2*dy/self.distance(dx, dy)
+			line2_end_y = (end.y + .5)*length + self.size/2*dx/self.distance(dx, dy)	
+			draw.line(screen, (0, 0, 255), (line1_start_x, line1_start_y), (line1_end_x, line1_end_y))
+			draw.line(screen, (0, 0, 255), (line2_start_x, line2_start_y), (line2_end_x, line2_end_y))
+			display.update()
+			sleep(.5)
+			line1 = self.line_of_sight_point_to_point(screen, (line1_start_x, line1_start_y), (line1_end_x, line1_end_y), tiles, length)
+			line2 = self.line_of_sight_point_to_point(screen, (line2_start_x, line2_start_y), (line2_end_x, line2_end_y), tiles, length)
+			if line1:
+				draw.line(screen, (0, 255, 0), (line1_start_x, line1_start_y), (line1_end_x, line1_end_y))
+			else:
+				draw.line(screen, (255, 0, 0), (line1_start_x, line1_start_y), (line1_end_x, line1_end_y))
+			if line2:
+				draw.line(screen, (0, 255, 0), (line2_start_x, line2_start_y), (line2_end_x, line2_end_y))
+			else:
+				draw.line(screen, (255, 0, 0), (line2_start_x, line2_start_y), (line2_end_x, line2_end_y))
+			display.update()
+			sleep(.5)
+			return line1 and line2
+		else:
+			return True
+
+	def line_of_sight_point_to_point(self, screen, start, end, tiles, length):
+		start = (int(start[0]), int(start[1]))
+		end = (int(end[0]), int(end[1]))
+		draw.line(screen, blue, start, end)
+		display.update()
+		dx = float(start[0] - end[0])
+		dy = float(start[1] - end[1])
+		#if line is not pointing up then there are intersections with verticle lines
 		if dx != 0:
-			if dy < 0:
-				y = child.y*length + length
-			elif dy > 0:
-				y = child.y*length - length
-			elif dy == 0:
-				y = child.y*length
-			#pointing left
-			if dx < 0:
-				x = child.x*length + length
-				Xa = -length
-			#pointing right
-			elif dx > 0:
-				x = child.x*length - length
+			#calculate first and last intersection
+			if dx < 0:#if point is to the right of entity then
+				x0 = (start[0]/length + 1)*length
+				x1 = (end[0]/length + 1)*length
 				Xa = length
-			while self.while_condition(x, length*grandparrent.x, Xa):
-				if tiles[int(x/length)][int(y/length)].blocked:
+			if dx > 0:#if point is to the left of entity then
+				x0 = (start[0]/length - 1)*length
+				x1 = (end[0]/length - 1)*length
+				Xa = -length
+			y0 = start[1] + dy/dx*(x0 - start[0])
+			y1 = end[1] + dy/dx*(x1 - end[0])
+			while abs(x0 - x1) > .00001 and abs(y0 - y1) > .00001:
+				draw.circle(screen, red, (int(x0), int(y0)), 3)
+				display.update()
+				sleep(.5)
+				if tiles[int(x0/length)][int(y0/length)].blocked:
 					return False
-				x += Xa
-				y += float(dy)/dx*Xa
+				x0 += Xa
+				y0 += dy/dx*Xa
+		if dy != 0:
+			if dy < 0:
+				y0 = (start[1]/length + 1)*length
+				y1 = (end[1]/length + 1)*length
+				Ya = length
+			if dy > 0:
+				y0 = (start[1]/length - 1)*length
+				y1 = (end[1]/length - 1)*length
+				Ya = -length
+			x0 = start[0] + dx/dy*(y0 - start[1])
+			x1 = end[0] + dx/dy*(y1 - end[1])
+			while abs(x0 - x1) > .00001 and abs(y0 - y1) > .00001:
+				draw.circle(screen, green, (int(x0), int(y0)), 3)
+				display.update()
+				sleep(.5)
+				if tiles[int(x0/length)][int(y0/length)].blocked:
+					return False
+				y0 += Ya
+				x0 += dx/dy*Ya
 		return True
 
-	def pathfind(self, start, goal, world_height, world_width, tiles, length):
-		# if self.line_of_sight(start, goal, tiles, length):
-		# 	self.path = [goal]
-		# 	return
+	def pathfind(self, screen, start, goal, tiles, length):
 		frontier = []
 		frontier.append((start, 0))
 		came_from = {}
@@ -164,16 +212,26 @@ class Entity:
 					current = came_from[current]
 					self.path.insert(0, current)
 				break
-			for neighbor in current.get_neighbors(world_height, world_width, tiles):
-				if came_from[current] != None and self.line_of_sight(came_from[current], neighbor, tiles, length):
-					came_from[neighbor] = came_from[current]
-					new_cost = cost_so_far[came_from[current]] + len(neighbor.entities) + self.distance(came_from[current], neighbor)
-				else:
-					came_from[neighbor] = current
-					new_cost = cost_so_far[current] + len(neighbor.entities) + 1
+			for neighbor in current.get_neighbors(len(tiles[0]), len(tiles), tiles):
+				# rand = rando()
+				# current.draw(screen, rand, length)
+				# display.update()
+				# neighbor.draw(screen, rand, length)
+				# display.update()
+				# sleep(.5)
 				if (neighbor not in cost_so_far or new_cost < cost_so_far[neighbor]) and not neighbor.blocked:
-					cost_so_far[neighbor] = new_cost
-					priority = new_cost + self.distance(goal, neighbor)
+					if came_from[current] != None and self.line_of_sight_tile_to_tile(screen, came_from[current], neighbor, tiles, length):
+						# neighbor.draw(screen, green, length)
+						# display.update()
+						came_from[neighbor] = came_from[current]
+						new_cost = cost_so_far[came_from[current]] + self.heuristic(came_from[current], neighbor)
+					else:
+						# neighbor.draw(screen, red, length)
+						# display.update()
+						came_from[neighbor] = current
+						new_cost = cost_so_far[current] + 1
+						cost_so_far[neighbor] = new_cost
+					priority = new_cost + self.heuristic(goal, neighbor)
 					flag = True
 					for i in range(len(frontier)):
 						if priority < frontier[i][1]:
@@ -182,6 +240,7 @@ class Entity:
 							break
 					if flag:
 						frontier.insert(len(frontier), (neighbor, priority))
+				#stop_until_click()
 
 	def keys(self):
 		pass
@@ -196,8 +255,11 @@ class Entity:
 		self.velocity_x = 0
 		self.velocity_y = 0
 		if self.path != []:
-			self.velocity_x = self.path[0].x*length - self.x
-			self.velocity_y = self.path[0].y*length - self.y
+			if sqrt((self.path[0].x*length - self.x)**2 + (self.path[0].y*length - self.y)**2) < self.speed:
+				del self.path[0]
+			if self.path != []:
+				self.velocity_x = (self.path[0].x + .5)*length - self.x
+				self.velocity_y = (self.path[0].y + .5)*length - self.y
 
 	def update_separation(self):
 		self.separation_x = 0
@@ -279,7 +341,9 @@ class Entity:
 
 	def attack_move(self, frame, entity):
 		pass
-		#
+	
+	def stop(self):
+		self.path = []
 
 	def hold(self):
 		pass
@@ -293,9 +357,21 @@ class Entity:
 		pass
 
 	def update(self, entities, length, tiles, frame):
-		if self.command_queue == []:
-			for entity in entities:
-				if entity.side != self.side and self.distance(self, entity) < self.attack_radius:
-					self.command_queue = [(self.attack, (self.frame, entity))]
-		else:
-			self.command_queue[0][0](*self.command_queue[0][1])
+		# if self.command_queue == []:
+		# 	for entity in entities:
+		# 		if entity.side != self.side and self.distance(self, entity) < self.attack_radius:
+		# 			self.command_queue = [(self.attack, (self.frame, entity))]
+		# else:
+		# 	self.command_queue[0][0](*self.command_queue[0][1])
+
+		x = self.x
+		y = self.y
+		self.rect = Rect(self.x - self.size/2, self.y - self.size/2, self.size, self.size)
+		self.update_velocity(length)
+		self.update_separation()
+		self.update_alignment()
+		self.update_cohesion()
+		self.update_location(len(tiles), len(tiles[0]), length)
+		if self.x/length != x or self.y/length != y:
+			self.update_tiles(x, y, length, tiles)
+			self.update_neighbors(tiles, length)

@@ -4,15 +4,14 @@ from csv import *
 
 class State():
 
-	def __init__(self, screen):
+	def __init__(self, sceen):
 		self.last_right_click = mouse.get_pressed()[0]
 		self.last_pos = mouse.get_pos()
 		self.last_time = time()
 		self.minimized = False
-		self.frame = 0
 		self.setup()
 		self.running = True
-		self.handle_update(screen)
+		self.handle_update(sceen)
 
 	def setup(self):
 		pass
@@ -56,7 +55,7 @@ class State():
 		pass
 
 	def draw(self):
-		pass
+		display.update()
 
 	def tick(self, fps = 30):
 		interval = 1./fps
@@ -64,6 +63,12 @@ class State():
 		if delta < interval:
 			sleep(interval - delta)
 		self.last_time = time()
+
+	def present_other_scene(self, other_scene):
+		self.other_scene = other_scene()
+
+	def dismiss_other_scene(self):
+		del self
 
 	def handle_events(self):
 		for evnt in event.get():
@@ -90,11 +95,11 @@ class State():
 			self.events(evnt)
 
 	def handle_draw(self, screen):
+		screen.fill((0, 0, 0))
 		self.draw()
 
 	def handle_update(self, screen):
 		while self.running:
-			self.frame += 1
 			a = time()
 			self.handle_events()
 			b = time()
@@ -105,7 +110,7 @@ class State():
 			self.tick()	
 			with open("data.csv", "a") as csvfile:
 				write = writer(csvfile)
-				if d - a <.15:
+				if d - a <.5:
 					write.writerow([d - a])
-			# if d - a > .0333:
-			# 	print "frame:", self.frame, "handle events:", b - a, "update:", c - b, "draw:", d - c, "total:", d - a
+			if d - a > .0333:
+				print "frame:", self.frame, "handle events:", b - a, "update:", c - b, "draw:", d - c, "total:", d - a

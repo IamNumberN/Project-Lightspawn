@@ -20,7 +20,7 @@ def timer(function, *args):
 class GameState(State):
 
 	def setup(self):
-		self.show_grid = False
+		self.show_grid = True
 		self.move_camera = False
 		self.save = False
 		self.camera_x = 0
@@ -33,7 +33,7 @@ class GameState(State):
 		self.tiles = self.generate_tiles(self.world_width, self.world_height)
 		#self.draw_world()
 		self.buttons = [Button(self.load, 16, 16), Button(self.toggle_save, 64, 16), Button(self.zoom_in, 112, 16), Button(self.zoom_out, 160, 16)]
-		self.entities = [Entity(self.tiles, 64*i, 64*i, self.tile_length) for i in range(1, 2)]
+		self.entities = [Entity(self.tiles, 880*i, 406*i, self.tile_length) for i in range(1, 2)]
 		self.click_x = None
 		self.click_y = None
 		self.selection_box = None
@@ -48,9 +48,9 @@ class GameState(State):
 		self.entities_selected7 = []
 		self.entities_selected8 = []
 		self.entities_selected9 = []
-		self.frame = 0
 		self.light_level = {}
 		self.load_file_name = None
+		self.click1 = None
 
 	def generate_tiles(self, width, height):
 		tiles = [[Tile(x, y) for y in range(height)] for x in range(width)]
@@ -60,6 +60,9 @@ class GameState(State):
 		for y in range(height):
 			tiles[0][y] = Wall(0, y)
 			tiles[width - 1][y] = Wall(width - 1, y)
+		for x in range(5):
+			tiles[x + 4][4] = Wall(x + 4, 4)
+		tiles[28][13] = Wall(28, 13)
 		return tiles
 
 
@@ -174,30 +177,48 @@ class GameState(State):
 
 	#tells all selected entities to pathfind to the clicked tile
 	def right_click_began(self):
-		keys = key.get_pressed()
-		for entity in self.entities:
-			if entity.rect.collidepoint(self.camera_mouse()):
-				if keys[K_LSHIFT]:
-					for selected_entity in self.entities_selected:
-						entity.command_queue.append(entity.follow, (self.frame, selected_entity))
-				else:
-					for entity in self.entities_selected:
-						entity.command_queue = [entity.follow, (self.frame, entity)]
-		if self.mouse_tile() != None:
-			if keys[K_LSHIFT]:
-				for selected_entity in self.entities_selected:
-					start = self.tiles[selected_entity.x/self.tile_length][selected_entity.y/self.tile_length]
-					end = self.mouse_tile()
-					if end != None and not end.blocked:
-						selected_entity.pathfind(start, end, self.world_height, self.world_width, self.tiles, self.tile_length)
-					selected_entity.command_queue.append(selected_entity.move, (self.frame, self.mouse_tile(), self.tiles, self.tile_length))
-			else:
-				for selected_entity in self.entities_selected:
-					start = self.tiles[selected_entity.x/self.tile_length][selected_entity.y/self.tile_length]
-					end = self.mouse_tile()
-					if end != None and not end.blocked:
-						selected_entity.pathfind(start, end, self.world_height, self.world_width, self.tiles, self.tile_length)
-					selected_entity.command_queue = [(selected_entity.move, (self.frame, self.mouse_tile(), self.tiles, self.tile_length))]
+		# keys = key.get_pressed()
+		# for entity in self.entities:
+		# 	if entity.rect.collidepoint(self.camera_mouse()):
+		# 		if keys[K_LSHIFT]:
+		# 			for selected_entity in self.entities_selected:
+		# 				entity.command_queue.append(entity.follow, (self.frame, selected_entity))
+		# 		else:
+		# 			for entity in self.entities_selected:
+		# 				entity.command_queue = [entity.follow, (self.frame, entity)]
+		# if self.mouse_tile() != None:
+		# 	if keys[K_LSHIFT]:
+		# 		for selected_entity in self.entities_selected:
+		# 			start = self.tiles[selected_entity.x/self.tile_length][selected_entity.y/self.tile_length]
+		# 			end = self.mouse_tile()
+		# 			if end != None and not end.blocked:
+		# 				selected_entity.pathfind(start, end, self.world_height, self.world_width, self.tiles, self.tile_length)
+		# 			selected_entity.command_queue.append(selected_entity.move, (self.frame, self.mouse_tile(), self.tiles, self.tile_length))
+		# 	else:
+		# 		for selected_entity in self.entities_selected:
+		# 			start = self.tiles[selected_entity.x/self.tile_length][selected_entity.y/self.tile_length]
+		# 			end = self.mouse_tile()
+		# 			if end != None and not end.blocked:
+		# 				selected_entity.pathfind(screen, start, end, self.tiles, self.tile_length)
+		# 			selected_entity.command_queue = [(selected_entity.move, (self.frame, self.mouse_tile(), self.tiles, self.tile_length))]
+		self.pathfind_test(self):
+
+	def pathfind_test(self):
+		pass
+
+	def line_of_sight_ttt_test(self):
+		start = self.tiles[self.entities[0].x/self.tile_length][self.entities[0].y/self.tile_length]
+		end = self.mouse_tile()
+		if self.entities[0].line_of_sight_tile_to_tile(screen, start, end, self.tiles, self.tile_length):
+			self.entities[0].path = [self.mouse_tile()]
+
+	def line_of_sight_ptp_test(self):
+		if self.click1 != None:
+			self.entities[0].line_of_sight_point_to_point(screen, self.click1, self.camera_mouse(), self.tiles, self.tile_length)
+			self.click1 = None
+		else:
+			self.click1 = self.camera_mouse()
+
 
 	#if we are trying to select entities then adjust the size to our selection box
 	def mouse_moved(self):
@@ -267,6 +288,9 @@ class GameState(State):
 			self.entities_selected9 = self.entities_selected
 		if not keys[K_LCTRL] and keys[K_9] and self.entities_selected9 != []:
 			self.entities_selected = self.entities_selected9
+		if keys[K_s]:
+			for entity in self.entities_selected:
+				entity.stop()
 		for entity in self.entities_selected:
 			entity.keys()
 
@@ -309,9 +333,9 @@ class GameState(State):
 		right = min(self.world_width, (-self.camera_x + screen.get_width())/self.tile_length + 1)
 		for x in range(left, right):
 			for y in range(top, bottom):
-				if self.tiles[x][y].seen and self.tiles[x][y] not in self.light_level:
-					tile = self.tiles[x][y]
-					self.tiles[x][y].draw(self.world, tile.darken(tile.color, .5), self.tile_length)
+				# if self.tiles[x][y].seen and self.tiles[x][y] not in self.light_level:
+				tile = self.tiles[x][y]
+				self.tiles[x][y].draw(self.world, tile.darken(tile.color, .5), self.tile_length)
 
 	#for every tile for every entity cast a ray and draw if it doesn't intersect(super inefficent won't be used)
 	def ray_cast_draw_world(self):
@@ -450,8 +474,7 @@ class GameState(State):
 	def draw(self):
 		# timer(self.draw_FOV)
 		# timer(self.ray_cast_draw_world)
-		#self.entities[0].draw(screen)
-		self.calculate_FOV()
+		#self.calculate_FOV()
 		self.draw_world()
 		self.draw_grid()
 		self.draw_enities_selected()
@@ -487,7 +510,6 @@ class GameState(State):
 			entity.update(self.entities, self.tile_length, self.tiles, self.frame)
 
 	def update(self):
-		self.frame += 1
 		self.update_camera()
 		self.kill_dead_entities()
 		self.update_entities()
@@ -499,5 +521,5 @@ class GameState(State):
 
 if __name__ == '__main__':
 	init()
-	screen = display.set_mode((1366, 768), FULLSCREEN)
+	screen = display.set_mode((1366, 768) )
 	new_game = GameState(screen)
