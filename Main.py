@@ -33,7 +33,7 @@ class GameState(State):
 		self.tiles = self.generate_tiles(self.world_width, self.world_height)
 		#self.draw_world()
 		self.buttons = [Button(self.load, 16, 16), Button(self.toggle_save, 64, 16), Button(self.zoom_in, 112, 16), Button(self.zoom_out, 160, 16)]
-		self.entities = [Entity(self.tiles, 880*i, 406*i, self.tile_length) for i in range(1, 2)]
+		self.entities = [Entity(self.tiles, 256*i, 256*i, self.tile_length) for i in range(1, 3)]
 		self.click_x = None
 		self.click_y = None
 		self.selection_box = None
@@ -201,16 +201,19 @@ class GameState(State):
 		# 			if end != None and not end.blocked:
 		# 				selected_entity.pathfind(screen, start, end, self.tiles, self.tile_length)
 		# 			selected_entity.command_queue = [(selected_entity.move, (self.frame, self.mouse_tile(), self.tiles, self.tile_length))]
-		self.pathfind_test(self):
+		#self.line_of_sight_ttt_test()
+		timer(self.pathfind_test)
 
 	def pathfind_test(self):
-		pass
+		for entity in self.entities_selected:
+			entity.lazy_theta_star(screen, self.mouse_tile(), self.tiles, self.tile_length)
 
 	def line_of_sight_ttt_test(self):
-		start = self.tiles[self.entities[0].x/self.tile_length][self.entities[0].y/self.tile_length]
-		end = self.mouse_tile()
-		if self.entities[0].line_of_sight_tile_to_tile(screen, start, end, self.tiles, self.tile_length):
-			self.entities[0].path = [self.mouse_tile()]
+		if self.click1 != None:
+			self.entities[0].line_of_sight_tile_to_tile(screen, self.click1, self.mouse_tile(), self.tiles, self.tile_length)
+			self.click1 = None
+		else:
+			self.click1 = self.mouse_tile()
 
 	def line_of_sight_ptp_test(self):
 		if self.click1 != None:
@@ -482,6 +485,9 @@ class GameState(State):
 		screen.blit(self.world, (self.camera_x, self.camera_y))
 		self.draw_selection_box()
 		self.draw_buttons()
+		for entity in self.entities:
+			for path in entity.path:
+				path.draw(screen, path.color, self.tile_length)
 		display.update()
 
 	def update_camera(self):

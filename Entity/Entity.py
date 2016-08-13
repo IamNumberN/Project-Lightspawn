@@ -48,7 +48,7 @@ class Entity:
 		self.acceleration_y = 0
 		self.velocity_x = 0
 		self.velocity_y = 0
-		self.separation_weight = 90
+		self.separation_weight = 80
 		self.separation_x = 0
 		self.separation_y = 0
 		self.alignment_weight = 0
@@ -66,6 +66,10 @@ class Entity:
 		self.side = 0
 		self.command_queue = []
 		self.update_neighbors(tiles, length)
+
+		self.pathfind_queue = []
+		self.lighting_queue = []
+
 		self.setup()
 
 	def setup(self):
@@ -128,22 +132,8 @@ class Entity:
 			line2_start_y = (start.y + .5)*length + self.size/2*dx/self.distance(dx, dy)
 			line2_end_x = (end.x + .5)*length - self.size/2*dy/self.distance(dx, dy)
 			line2_end_y = (end.y + .5)*length + self.size/2*dx/self.distance(dx, dy)	
-			draw.line(screen, (0, 0, 255), (line1_start_x, line1_start_y), (line1_end_x, line1_end_y))
-			draw.line(screen, (0, 0, 255), (line2_start_x, line2_start_y), (line2_end_x, line2_end_y))
-			display.update()
-			sleep(.5)
 			line1 = self.line_of_sight_point_to_point(screen, (line1_start_x, line1_start_y), (line1_end_x, line1_end_y), tiles, length)
 			line2 = self.line_of_sight_point_to_point(screen, (line2_start_x, line2_start_y), (line2_end_x, line2_end_y), tiles, length)
-			if line1:
-				draw.line(screen, (0, 255, 0), (line1_start_x, line1_start_y), (line1_end_x, line1_end_y))
-			else:
-				draw.line(screen, (255, 0, 0), (line1_start_x, line1_start_y), (line1_end_x, line1_end_y))
-			if line2:
-				draw.line(screen, (0, 255, 0), (line2_start_x, line2_start_y), (line2_end_x, line2_end_y))
-			else:
-				draw.line(screen, (255, 0, 0), (line2_start_x, line2_start_y), (line2_end_x, line2_end_y))
-			display.update()
-			sleep(.5)
 			return line1 and line2
 		else:
 			return True
@@ -151,8 +141,6 @@ class Entity:
 	def line_of_sight_point_to_point(self, screen, start, end, tiles, length):
 		start = (int(start[0]), int(start[1]))
 		end = (int(end[0]), int(end[1]))
-		draw.line(screen, blue, start, end)
-		display.update()
 		dx = float(start[0] - end[0])
 		dy = float(start[1] - end[1])
 		#if line is not pointing up then there are intersections with verticle lines
@@ -163,15 +151,12 @@ class Entity:
 				x1 = (end[0]/length + 1)*length
 				Xa = length
 			if dx > 0:#if point is to the left of entity then
-				x0 = (start[0]/length - 1)*length
-				x1 = (end[0]/length - 1)*length
+				x0 = (start[0]/length)*length
+				x1 = (end[0]/length)*length
 				Xa = -length
 			y0 = start[1] + dy/dx*(x0 - start[0])
 			y1 = end[1] + dy/dx*(x1 - end[0])
 			while abs(x0 - x1) > .00001 and abs(y0 - y1) > .00001:
-				draw.circle(screen, red, (int(x0), int(y0)), 3)
-				display.update()
-				sleep(.5)
 				if tiles[int(x0/length)][int(y0/length)].blocked:
 					return False
 				x0 += Xa
@@ -182,22 +167,20 @@ class Entity:
 				y1 = (end[1]/length + 1)*length
 				Ya = length
 			if dy > 0:
-				y0 = (start[1]/length - 1)*length
-				y1 = (end[1]/length - 1)*length
+				y0 = (start[1]/length)*length
+				y1 = (end[1]/length)*length
 				Ya = -length
 			x0 = start[0] + dx/dy*(y0 - start[1])
 			x1 = end[0] + dx/dy*(y1 - end[1])
 			while abs(x0 - x1) > .00001 and abs(y0 - y1) > .00001:
-				draw.circle(screen, green, (int(x0), int(y0)), 3)
-				display.update()
-				sleep(.5)
 				if tiles[int(x0/length)][int(y0/length)].blocked:
 					return False
 				y0 += Ya
 				x0 += dx/dy*Ya
 		return True
 
-	def pathfind(self, screen, start, goal, tiles, length):
+	def a_star(self, screen, goal, tiles, length):
+		start = tiles[self.x/length][self.y/length]
 		frontier = []
 		frontier.append((start, 0))
 		came_from = {}
@@ -213,24 +196,12 @@ class Entity:
 					self.path.insert(0, current)
 				break
 			for neighbor in current.get_neighbors(len(tiles[0]), len(tiles), tiles):
-				# rand = rando()
-				# current.draw(screen, rand, length)
+				# neighbor.draw(screen, red, length)
 				# display.update()
-				# neighbor.draw(screen, rand, length)
-				# display.update()
-				# sleep(.5)
+				new_cost = cost_so_far[current] + 1
 				if (neighbor not in cost_so_far or new_cost < cost_so_far[neighbor]) and not neighbor.blocked:
-					if came_from[current] != None and self.line_of_sight_tile_to_tile(screen, came_from[current], neighbor, tiles, length):
-						# neighbor.draw(screen, green, length)
-						# display.update()
-						came_from[neighbor] = came_from[current]
-						new_cost = cost_so_far[came_from[current]] + self.heuristic(came_from[current], neighbor)
-					else:
-						# neighbor.draw(screen, red, length)
-						# display.update()
-						came_from[neighbor] = current
-						new_cost = cost_so_far[current] + 1
-						cost_so_far[neighbor] = new_cost
+					came_from[neighbor] = current
+					cost_so_far[neighbor] = new_cost
 					priority = new_cost + self.heuristic(goal, neighbor)
 					flag = True
 					for i in range(len(frontier)):
@@ -240,7 +211,88 @@ class Entity:
 							break
 					if flag:
 						frontier.insert(len(frontier), (neighbor, priority))
-				#stop_until_click()
+
+	def theta_star(self, screen, goal, tiles, length):
+		start = tiles[self.x/length][self.y/length]
+		frontier = []
+		frontier.append((start, 0))
+		came_from = {}
+		cost_so_far = {}
+		came_from[start] = None
+		cost_so_far[start] = 0
+		while frontier != []:
+			current = frontier.pop(0)[0]
+			if current == goal:
+				self.path = [current]
+				while came_from[current] != None:
+					current = came_from[current]
+					self.path.insert(0, current)
+				break
+			for neighbor in current.get_neighbors(len(tiles[0]), len(tiles), tiles):
+				# neighbor.draw(screen, red, length)
+				# display.update()
+				if came_from[current] != None and self.line_of_sight_tile_to_tile(screen, came_from[current], neighbor, tiles, length):
+					new_cost = cost_so_far[came_from[current]] + self.heuristic(came_from[current], neighbor)
+					if (neighbor not in cost_so_far or new_cost < cost_so_far[neighbor]) and not neighbor.blocked:
+						came_from[neighbor] = came_from[current]
+				else:
+					new_cost = cost_so_far[current] + 1
+					if (neighbor not in cost_so_far or new_cost < cost_so_far[neighbor]) and not neighbor.blocked:
+						came_from[neighbor] = current
+				if (neighbor not in cost_so_far or new_cost < cost_so_far[neighbor]) and not neighbor.blocked:
+					cost_so_far[neighbor] = new_cost
+					priority = new_cost + self.heuristic(goal, neighbor)
+					flag = True
+					for i in range(len(frontier)):
+						if priority < frontier[i][1]:
+							flag = False
+							frontier.insert(i, (neighbor, priority))
+							break
+					if flag:
+						frontier.insert(len(frontier), (neighbor, priority))
+
+	def lazy_theta_star(self, screen, goal, tiles, length):
+		start = tiles[self.x/length][self.y/length]
+		frontier = []
+		frontier.append((start, 0))
+		came_from = {}
+		cost_so_far = {}
+		came_from[start] = None
+		cost_so_far[start] = 0
+		while frontier != []:
+			current = frontier.pop(0)[0]
+			if came_from[current] != None and not self.line_of_sight_tile_to_tile(screen, came_from[current], current, tiles, length):
+				neighbors = current.get_neighbors(len(tiles[0]), len(tiles), tiles)
+				valid_costs = [cost_so_far[neighbor] for neighbor in neighbors if neighbor in cost_so_far]
+				valid_neighbors = [neighbor for neighbor in neighbors if neighbor in cost_so_far]
+				smallest = valid_costs.index(min(valid_costs))
+				came_from[current] = valid_neighbors[smallest]
+				cost_so_far[current] = cost_so_far[valid_neighbors[smallest]] + 1
+			if current == goal:
+				self.path = [current]
+				while came_from[current] != None:
+					current = came_from[current]
+					self.path.insert(0, current)
+				break
+			for neighbor in current.get_neighbors(len(tiles[0]), len(tiles), tiles):
+				if came_from[current] != None:
+					new_cost = cost_so_far[came_from[current]] + self.heuristic(came_from[current], neighbor)
+					if (neighbor not in cost_so_far or new_cost < cost_so_far[neighbor]) and not neighbor.blocked:
+						came_from[neighbor] = came_from[current]
+				else:
+					new_cost = 1
+					came_from[neighbor] = current
+				if (neighbor not in cost_so_far or new_cost < cost_so_far[neighbor]) and not neighbor.blocked:
+					cost_so_far[neighbor] = new_cost
+					priority = new_cost + self.heuristic(goal, neighbor)
+					flag = True
+					for i in range(len(frontier)):
+						if priority < frontier[i][1]:
+							flag = False
+							frontier.insert(i, (neighbor, priority))
+							break
+					if flag:
+						frontier.insert(len(frontier), (neighbor, priority))
 
 	def keys(self):
 		pass
@@ -255,7 +307,7 @@ class Entity:
 		self.velocity_x = 0
 		self.velocity_y = 0
 		if self.path != []:
-			if sqrt((self.path[0].x*length - self.x)**2 + (self.path[0].y*length - self.y)**2) < self.speed:
+			if sqrt(((self.path[0].x + .5)*length - self.x)**2 + ((self.path[0].y + .5)*length - self.y)**2) < self.speed:
 				del self.path[0]
 			if self.path != []:
 				self.velocity_x = (self.path[0].x + .5)*length - self.x
