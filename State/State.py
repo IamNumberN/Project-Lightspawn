@@ -107,5 +107,5 @@ class State():
 				write = writer(csvfile)
 				if d - a <.15:
 					write.writerow([d - a])
-			# if d - a > .0333:
-			# 	print "frame:", self.frame, "handle events:", b - a, "update:", c - b, "draw:", d - c, "total:", d - a
+			if d - a > .0333:
+				print "frame:", self.frame, "handle events:", b - a, "update:", c - b, "draw:", d - c, "total:", d - a

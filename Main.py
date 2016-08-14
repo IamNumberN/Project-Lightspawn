@@ -25,15 +25,15 @@ class GameState(State):
 		self.save = False
 		self.camera_x = 0
 		self.camera_y = 0
-		self.world_width = 32
-		self.world_height = 32
+		self.world_width = 140
+		self.world_height = 140
 		self.tile_length = 32
 		self.world = Surface((self.world_width*self.tile_length, self.world_height*self.tile_length))
 		#self.tiles = [[Tile(x, y) for y in range(self.world_height)] for x in range(self.world_width)]
 		self.tiles = self.generate_tiles(self.world_width, self.world_height)
 		#self.draw_world()
 		self.buttons = [Button(self.load, 16, 16), Button(self.toggle_save, 64, 16), Button(self.zoom_in, 112, 16), Button(self.zoom_out, 160, 16)]
-		self.entities = [Entity(self.tiles, 256*i, 256*i, self.tile_length) for i in range(1, 3)]
+		self.entities = [Entity(self.tiles, 48*i, 48*i, self.tile_length) for i in range(1, 2)]
 		self.click_x = None
 		self.click_y = None
 		self.selection_box = None
@@ -53,16 +53,18 @@ class GameState(State):
 		self.click1 = None
 
 	def generate_tiles(self, width, height):
-		tiles = [[Tile(x, y) for y in range(height)] for x in range(width)]
+		tiles = [[None for y in range(height)] for x in range(width)]
 		for x in range(width):
 			tiles[x][0] = Wall(x, 0)
 			tiles[x][height - 1] = Wall(x, height - 1)
 		for y in range(height):
 			tiles[0][y] = Wall(0, y)
 			tiles[width - 1][y] = Wall(width - 1, y)
-		for x in range(5):
-			tiles[x + 4][4] = Wall(x + 4, 4)
-		tiles[28][13] = Wall(28, 13)
+		for x in range(1, width - 1):
+			for y in range(1, height - 1):
+				tiles[x][y] = Wall(x, y) if randint(0, 5) == 1 else Tile(x, y)
+		tiles[width - 2][height - 2] = Tile(width - 2, height - 2)
+		tiles[1][1] = Tile(1, 1)
 		return tiles
 
 
@@ -206,7 +208,8 @@ class GameState(State):
 
 	def pathfind_test(self):
 		for entity in self.entities_selected:
-			entity.lazy_theta_star(screen, self.mouse_tile(), self.tiles, self.tile_length)
+			entity.a_star_with_path_smoothing(screen, self.mouse_tile(), self.tiles, self.tile_length)
+			#entity.theta_star(screen, self.mouse_tile(), self.tiles, self.tile_length)
 
 	def line_of_sight_ttt_test(self):
 		if self.click1 != None:
@@ -480,14 +483,14 @@ class GameState(State):
 		#self.calculate_FOV()
 		self.draw_world()
 		self.draw_grid()
+		# for entity in self.entities:
+		# 	for path in entity.path:
+		# 		path.draw(self.world, path.color, self.tile_length)
 		self.draw_enities_selected()
 		self.draw_entities()
 		screen.blit(self.world, (self.camera_x, self.camera_y))
 		self.draw_selection_box()
 		self.draw_buttons()
-		for entity in self.entities:
-			for path in entity.path:
-				path.draw(screen, path.color, self.tile_length)
 		display.update()
 
 	def update_camera(self):
@@ -527,5 +530,5 @@ class GameState(State):
 
 if __name__ == '__main__':
 	init()
-	screen = display.set_mode((1366, 768) )
+	screen = display.set_mode((1366, 768), FULLSCREEN)
 	new_game = GameState(screen)

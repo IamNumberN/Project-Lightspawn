@@ -156,7 +156,9 @@ class Entity:
 				Xa = -length
 			y0 = start[1] + dy/dx*(x0 - start[0])
 			y1 = end[1] + dy/dx*(x1 - end[0])
-			while abs(x0 - x1) > .00001 and abs(y0 - y1) > .00001:
+			while abs(x0 - x1) > 1 and abs(y0 - y1) > 1:
+				if not (0 <= int(x0/length) <= len(tiles) or 0 <= int(y0/length) <= len(tiles[0])):
+					return True
 				if tiles[int(x0/length)][int(y0/length)].blocked:
 					return False
 				x0 += Xa
@@ -172,7 +174,9 @@ class Entity:
 				Ya = -length
 			x0 = start[0] + dx/dy*(y0 - start[1])
 			x1 = end[0] + dx/dy*(y1 - end[1])
-			while abs(x0 - x1) > .00001 and abs(y0 - y1) > .00001:
+			while abs(x0 - x1) > 1 and abs(y0 - y1) > 1:
+				if not (0 <= int(x0/length) <= len(tiles) or 0 <= int(y0/length) <= len(tiles[0])):
+					return True
 				if tiles[int(x0/length)][int(y0/length)].blocked:
 					return False
 				y0 += Ya
@@ -203,6 +207,40 @@ class Entity:
 					came_from[neighbor] = current
 					cost_so_far[neighbor] = new_cost
 					priority = new_cost + self.heuristic(goal, neighbor)
+					flag = True
+					for i in range(len(frontier)):
+						if priority < frontier[i][1]:
+							flag = False
+							frontier.insert(i, (neighbor, priority))
+							break
+					if flag:
+						frontier.insert(len(frontier), (neighbor, priority))
+
+	def a_star_with_path_smoothing(self, screen, goal, tiles, length):
+		start = tiles[self.x/length][self.y/length]
+		frontier = []
+		frontier.append((start, 0))
+		came_from = {}
+		cost_so_far = {}
+		came_from[start] = None
+		cost_so_far[start] = 0
+		while frontier != []:
+			current = frontier.pop(0)[0]
+			if current == goal:
+				self.path = [current]
+				while came_from[current] != None:
+					if not self.line_of_sight_tile_to_tile(screen, came_from[current], self.path[0], tiles, length):
+						self.path.insert(0, current)
+					current = came_from[current]
+				break
+			for neighbor in current.get_neighbors(len(tiles[0]), len(tiles), tiles):
+				# neighbor.draw(screen, red, length)
+				# display.update()
+				new_cost = cost_so_far[current] + 1
+				if (neighbor not in cost_so_far or new_cost < cost_so_far[neighbor]) and not neighbor.blocked:
+					came_from[neighbor] = current
+					cost_so_far[neighbor] = new_cost
+					priority = new_cost + 1.5*self.heuristic(goal, neighbor)
 					flag = True
 					for i in range(len(frontier)):
 						if priority < frontier[i][1]:
@@ -370,8 +408,8 @@ class Entity:
 
 	#if the tile is seen then pathfind to it
 	def move(self, frame, tile, tiles, length):
-		# if frame%20 == 0:
-		# 	self.pathfind(tiles[self.x/length][self.y/length], tile, world_height, world_width, tiles, length)
+		#if frame%20 == 0:
+			 
 		if tiles[self.x/length][self.y/length] == tile:
 			del self.command_queue[0]
 			return
@@ -391,7 +429,7 @@ class Entity:
 		pass
 		#if the entity is within my FOV if it is within my rnage of attack then attack else do breath first seach for a valid position to attack
 
-	def attack_move(self, frame, entity):
+	def attack_move(self, frame, tile):
 		pass
 	
 	def stop(self):
