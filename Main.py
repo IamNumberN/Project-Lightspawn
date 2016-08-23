@@ -2,6 +2,7 @@ from Entity import *
 from State import *
 from Button import *
 from Room import *
+from Trees import *
 from pygame import *
 from pygame.locals import *
 from sys import *
@@ -16,28 +17,40 @@ def timer(function, *args):
 		function(*args)
 		end = time()
 		print function.__name__, ":", end - start 
+
+def stop_until_click():
+	run = True
+	while run:
+		for evnt in event.get():
+			if evnt.type == MOUSEBUTTONDOWN:
+				run = False
+			if evnt.type == QUIT:
+				import sys
+				sys.exit()
  
 class GameState(State):
 
 	def setup(self):
-		self.show_grid = True
-		self.move_camera = False
+		self.show_grid = False
+		self.move_camera = True
 		self.save = False
 		self.camera_x = 0
 		self.camera_y = 0
-		self.world_width = 140
-		self.world_height = 140
+		self.side_1_entities = []
+		self.side_2_entities = []
+		self.world_width = 100
+		self.world_height = 100
 		self.tile_length = 32
+		self.sheet = self.sheet_to_list(image.load("sheet.png"), 8, 6, 32)
 		self.world = Surface((self.world_width*self.tile_length, self.world_height*self.tile_length))
-		#self.tiles = [[Tile(x, y) for y in range(self.world_height)] for x in range(self.world_width)]
 		self.tiles = self.generate_tiles(self.world_width, self.world_height)
-		#self.draw_world()
+		self.draw_tiles()
 		self.buttons = [Button(self.load, 16, 16), Button(self.toggle_save, 64, 16), Button(self.zoom_in, 112, 16), Button(self.zoom_out, 160, 16)]
-		self.entities = [Entity(self.tiles, 48*i, 48*i, self.tile_length) for i in range(1, 2)]
+		self.entities = self.side_1_entities +  self.side_2_entities
 		self.click_x = None
 		self.click_y = None
 		self.selection_box = None
-		self.entities_selected = self.entities
+		self.entities_selected = self.side_1_entities
 		self.entities_selected0 = []
 		self.entities_selected1 = []
 		self.entities_selected2 = []
@@ -52,27 +65,59 @@ class GameState(State):
 		self.load_file_name = None
 		self.click1 = None
 
+	def sheet_to_list(self, sheet, width, height, size):
+		return_lst = [Surface((size, size)) for i in range(width*height)]
+		for x in xrange(width):
+			for y in xrange(height):
+				return_lst[y*width + x].blit(sheet, (0, 0), (x*size, y*size, size, size))
+		return_lst.append(image.load("water.png"))
+		return return_lst
+
+
 	def generate_tiles(self, width, height):
-		tiles = [[None for y in range(height)] for x in range(width)]
-		for x in range(width):
-			tiles[x][0] = Wall(x, 0)
-			tiles[x][height - 1] = Wall(x, height - 1)
-		for y in range(height):
-			tiles[0][y] = Wall(0, y)
-			tiles[width - 1][y] = Wall(width - 1, y)
-		for x in range(1, width - 1):
-			for y in range(1, height - 1):
-				tiles[x][y] = Wall(x, y) if randint(0, 5) == 1 else Tile(x, y)
-		tiles[width - 2][height - 2] = Tile(width - 2, height - 2)
-		tiles[1][1] = Tile(1, 1)
+		self.tree = BSP_Node(0, 0, width, height)
+		self.tree.split()
+		tiles = [[Wall(x, y) for y in xrange(height)] for x in xrange(width)]
+		self.draw_leaves()
+		self.build_rooms(tiles)
+		self.build_hallways(tiles)
 		return tiles
 
+	def draw_leaves(self):
+		leaves = self.tree.get_leaves()
+		for leaf in leaves:
+			rect = Rect(8*leaf.x, 8*leaf.y, 8*leaf.width, 8*leaf.height)
+			draw.rect(screen, (0, 0, 255), rect, 3)
+			display.update()
+		stop_until_click()
+
+	def build_rooms(self, tiles):
+		leaves = self.tree.get_leaves()
+		print len(leaves)
+		for leaf in leaves:
+			# for x in range(randrange(leaf.x + 1, leaf.x + leaf.width/2), randrange(leaf.x + leaf.width/2, leaf.x + leaf.width)):
+			# 	for y in range(randrange(leaf.y + 1, leaf.x + leaf.height/2), randrange(leaf.y + leaf.height/2, leaf.y + leaf.height)):
+			for x in range(leaf.x + 1, leaf.width - 1):
+				for y in range(leaf.y + 1, leaf.height - 1):
+					tiles[x][y] = Tile(x, y)
+
+	def build_hallways(self, tiles):
+		leaves = self.tree.get_leaves()
+		for i in range(len(leaves)/2):
+			if leaves[2*i].direction == 1:
+				y = leaves[2*i].center_y
+				for x in range(leaves[2*i].center_x, leaves[2*i + 1].center_x):
+					tiles[x][y] = Tile(x, y)
+			else:
+				x = leaves[2*i].center_x
+				for y in range(leaves[2*i].center_y, leaves[2*i + 1].center_y):
+					tiles[x][y] = Tile(x, y)
 
 	#returns the x value of the mouse releative to the screen
 	def mouse_x(self):
 		return mouse.get_pos()[0]
 
-	#returns the yu value of the mouse releative to the screen
+	#returns the y value of the mouse releative to the screen
 	def mouse_y(self):
 		return mouse.get_pos()[1] 
 
@@ -80,11 +125,11 @@ class GameState(State):
 	def camera_mouse(self):
 		return self.mouse_x() - self.camera_x, self.mouse_y() - self.camera_y
 
-	#returns the x value of the mouse releative to the world
+	#returns the x value of the mouse relative to the world
 	def camera_mouse_x(self):
 		return self.mouse_x() - self.camera_x
 
-	#returns the x value of the mouse releative to the world
+	#returns the x value of the mouse relative to the world
 	def camera_mouse_y(self):
 		return self.mouse_y() - self.camera_y
 
@@ -147,29 +192,27 @@ class GameState(State):
 		keys = key.get_pressed()
 		for entity in self.entities:
 			if entity.rect.collidepoint(self.camera_mouse()):
-				if keys[K_m]:
+				if keys[K_a]:
 					if keys[K_LSHIFT]:
 						for selected_entity in self.entities_selected:
-							selected_entity.command_queue.append(selected_entity.move, (self.frame, entity))
-					else:
-						for selected_entity in self.entities_selected:
-							selected_entity.command_queue = [(selected_entity.move, (self.frame, entity))]
-				elif keys[K_a]:
-					if keys[K_LSHIFT]:
-						for selected_entity in self.entities_selected:
-							selected_entity.command_queue.append(selected_entity.attack, (self.frame, entity))
+							selected_entity.command_queue.append((selected_entity.attack, (self.frame, entity)))
 					else:
 						for selected_entity in self.entities_selected:
 							selected_entity.command_queue = [(selected_entity.attack, (self.frame, entity))]
-				elif entity.click_began():
-					return
 				else:
 					self.entities_selected = [entity]
 					return
-		if keys[K_p] and self.mouse_tile() != None:
+		if keys[K_m] and self.mouse_tile() != None:
 			if keys[K_LSHIFT]:
 				for selected_entity in self.entities_selected:
-					selected_entity.command_queue.append(selected_entity.patrol, (self.frame, self.mouse_tile()))
+					selected_entity.command_queue.append((selected_entity.move, (self.frame, self.mouse_tile())))
+			else:
+				for selected_entity in self.entities_selected:
+					selected_entity.command_queue = [(selected_entity.move, (self.frame, self.mouse_tile()))]
+		elif keys[K_p] and self.mouse_tile() != None:
+			if keys[K_LSHIFT]:
+				for selected_entity in self.entities_selected:
+					selected_entity.command_queue.append((selected_entity.patrol, (self.frame, self.mouse_tile())))
 			else:
 				for selected_entity in self.entities_selected:
 					selected_entity.command_queue = [(selected_entity.patrol, (self.frame, self.mouse_tile()))]
@@ -179,48 +222,40 @@ class GameState(State):
 
 	#tells all selected entities to pathfind to the clicked tile
 	def right_click_began(self):
-		# keys = key.get_pressed()
-		# for entity in self.entities:
-		# 	if entity.rect.collidepoint(self.camera_mouse()):
-		# 		if keys[K_LSHIFT]:
-		# 			for selected_entity in self.entities_selected:
-		# 				entity.command_queue.append(entity.follow, (self.frame, selected_entity))
-		# 		else:
-		# 			for entity in self.entities_selected:
-		# 				entity.command_queue = [entity.follow, (self.frame, entity)]
-		# if self.mouse_tile() != None:
-		# 	if keys[K_LSHIFT]:
-		# 		for selected_entity in self.entities_selected:
-		# 			start = self.tiles[selected_entity.x/self.tile_length][selected_entity.y/self.tile_length]
-		# 			end = self.mouse_tile()
-		# 			if end != None and not end.blocked:
-		# 				selected_entity.pathfind(start, end, self.world_height, self.world_width, self.tiles, self.tile_length)
-		# 			selected_entity.command_queue.append(selected_entity.move, (self.frame, self.mouse_tile(), self.tiles, self.tile_length))
-		# 	else:
-		# 		for selected_entity in self.entities_selected:
-		# 			start = self.tiles[selected_entity.x/self.tile_length][selected_entity.y/self.tile_length]
-		# 			end = self.mouse_tile()
-		# 			if end != None and not end.blocked:
-		# 				selected_entity.pathfind(screen, start, end, self.tiles, self.tile_length)
-		# 			selected_entity.command_queue = [(selected_entity.move, (self.frame, self.mouse_tile(), self.tiles, self.tile_length))]
-		#self.line_of_sight_ttt_test()
-		timer(self.pathfind_test)
+		keys = key.get_pressed()
+		for entity in self.entities:
+			if entity.rect.collidepoint(self.camera_mouse()):
+				print "why"
+				if keys[K_LSHIFT]:
+					for selected_entity in self.entities_selected:
+						entity.command_queue.append((entity.follow, (self.frame, selected_entity)))
+				else:
+					for entity in self.entities_selected:
+						entity.command_queue = [entity.follow, (self.frame, entity)]
+		if self.mouse_tile() != None:
+			if keys[K_LSHIFT]:
+				for selected_entity in self.entities_selected:
+					selected_entity.command_queue.append((selected_entity.move, (self.frame, self.mouse_tile())))
+			else:
+				for selected_entity in self.entities_selected:
+					selected_entity.command_queue = [(selected_entity.move, (self.frame, self.mouse_tile()))]
+		# self.line_of_sight_ttt_test()
 
 	def pathfind_test(self):
 		for entity in self.entities_selected:
-			entity.a_star_with_path_smoothing(screen, self.mouse_tile(), self.tiles, self.tile_length)
+			entity.a_star_with_path_smoothing(self.mouse_tile(), self.tiles, self.tile_length)
 			#entity.theta_star(screen, self.mouse_tile(), self.tiles, self.tile_length)
 
 	def line_of_sight_ttt_test(self):
 		if self.click1 != None:
-			self.entities[0].line_of_sight_tile_to_tile(screen, self.click1, self.mouse_tile(), self.tiles, self.tile_length)
+			print self.entities[0].draw_line_of_sight_tile_to_tile(screen, self.click1, self.mouse_tile(), self.tiles, self.tile_length)
 			self.click1 = None
 		else:
 			self.click1 = self.mouse_tile()
 
 	def line_of_sight_ptp_test(self):
 		if self.click1 != None:
-			self.entities[0].line_of_sight_point_to_point(screen, self.click1, self.camera_mouse(), self.tiles, self.tile_length)
+			print self.entities[0].draw_line_of_sight_point_to_point(screen, self.click1, self.camera_mouse(), self.tiles, self.tile_length)
 			self.click1 = None
 		else:
 			self.click1 = self.camera_mouse()
@@ -241,7 +276,7 @@ class GameState(State):
 			elif width > 0 and height > 0:
 				self.selection_box.topleft = (self.click_x, self.click_y)
 			rect = self.selection_box.move(-self.camera_x, - self.camera_y)
-			self.entities_selected = [self.entities[i] for i in rect.collidelistall(self.entities)]
+			self.entities_selected = [self.entities[i] for i in rect.collidelistall(self.side_1_entities)]
 
 	#stop selecting entities
 	def click_ended(self):
@@ -251,7 +286,7 @@ class GameState(State):
 			self.click_x = None
 			self.click_y = None
 
-	#define control groups left ctrl and a number sets the group just he number reselectes it
+	#define control groups left ctrl and a number sets the group just he number reselects it
 	def keys(self):
 		keys = key.get_pressed()
 		if keys[K_LCTRL] and keys[K_0]:
@@ -300,149 +335,38 @@ class GameState(State):
 		for entity in self.entities_selected:
 			entity.keys()
 
-	#for each entity do a breath first search on valid neighbors to draw field of view. allow peaking past corners
-	def draw_FOV(self):
-		self.light_level = {}
-		for entity in self.entities:
-			start = self.tiles[entity.x/self.tile_length][entity.y/self.tile_length]
-			top = max(0, -self.camera_y/self.tile_length - 1 - entity.light_radius)
-			bottom = min(self.world_height, (-self.camera_y + screen.get_height())/self.tile_length + 1 + entity.light_radius)
-			left = max(0, -self.camera_x/self.tile_length - 1 - entity.light_radius)
-			right = min(self.world_width, (-self.camera_x + screen.get_width())/self.tile_length + 1 + entity.light_radius)
-			start.draw(self.world, start.color, self.tile_length)
-			if top < start.y < bottom and left < start.x < right:
-				top = max(0, -self.camera_y/self.tile_length - 1)
-				bottom = min(self.world_height, (-self.camera_y + screen.get_height())/self.tile_length + 1)
-				left = max(0, -self.camera_x/self.tile_length - 1)
-				right = min(self.world_width, (-self.camera_x + screen.get_width())/self.tile_length + 1)
-				frontier = [start]
-				self.light_level[start] = 0
-				while frontier != []:
-					current = frontier.pop(0)
-					for neighbor in current.get_neighbors(self.world_width, self.world_height, self.tiles):
-						if self.light_level[current] + 1 < entity.light_radius:
-							if not neighbor.seen:
-								neighbor.seen = True
-							if neighbor not in self.light_level or self.light_level[current] + 1 < self.light_level[neighbor]:
-								if neighbor.transparent:
-									if start.level >= neighbor.level:
-										frontier.append(neighbor)
-										self.light_level[neighbor] = self.light_level[current] + 1
-										if top < current.y < bottom and left < current.x < right:
-											neighbor.draw(self.world, neighbor.color, self.tile_length)
-
 	#for every tile on screen that isn't drawn yet draw the tile
+	def draw_tiles(self):
+		top = max(0, -self.camera_y/self.tile_length - 1)
+		bottom = min(self.world_height, (-self.camera_y + screen.get_height())/self.tile_length + 1)
+		left = max(0, -self.camera_x/self.tile_length - 1)
+		right = min(self.world_width, (-self.camera_x + screen.get_width())/self.tile_length + 1)
+		for x in xrange(len(self.tiles)):
+			for y in xrange(len(self.tiles[0])):
+				self.tiles[x][y].draw(self.world, self.tiles, self.tile_length, self.sheet)
+
 	def draw_world(self):
+		screen.blit(self.world, )
+
+	def draw_shadows(self):
 		top = max(0, -self.camera_y/self.tile_length - 1)
 		bottom = min(self.world_height, (-self.camera_y + screen.get_height())/self.tile_length + 1)
 		left = max(0, -self.camera_x/self.tile_length - 1)
 		right = min(self.world_width, (-self.camera_x + screen.get_width())/self.tile_length + 1)
-		for x in range(left, right):
-			for y in range(top, bottom):
-				# if self.tiles[x][y].seen and self.tiles[x][y] not in self.light_level:
-				tile = self.tiles[x][y]
-				self.tiles[x][y].draw(self.world, tile.darken(tile.color, .5), self.tile_length)
-
-	#for every tile for every entity cast a ray and draw if it doesn't intersect(super inefficent won't be used)
-	def ray_cast_draw_world(self):
-		top = max(0, -self.camera_y/self.tile_length - 1)
-		bottom = min(self.world_height, (-self.camera_y + screen.get_height())/self.tile_length + 1)
-		left = max(0, -self.camera_x/self.tile_length - 1)
-		right = min(self.world_width, (-self.camera_x + screen.get_width())/self.tile_length + 1)
-		for x in range(left, right):
-			for y in range(top, bottom):
-				for entity in self.entities:
-					start = self.tiles[entity.x/self.tile_length][entity.y/self.tile_length]
-					if sqrt((x - start.x)**2 + (y - start.y)**2) > entity.light_radius:
-						continue
-					entity_top = max(0, -self.camera_y/self.tile_length - 1 - entity.light_radius)
-					entity_bottom = min(self.world_height, (-self.camera_y + screen.get_height())/self.tile_length + 1 + entity.light_radius)
-					entity_left = max(0, -self.camera_x/self.tile_length - 1 - entity.light_radius)
-					entity_right = min(self.world_width, (-self.camera_x + screen.get_width())/self.tile_length + 1 + entity.light_radius)
-					if entity_top < start.y < entity_bottom and entity_left < start.x < entity_right:
-						if entity.line_of_sight(start, self.tiles[x][y], self.tiles, self.tile_length):
-							self.tiles[x][y].draw(self.world, self.tiles[x][y].color, self.tile_length)
-							if self.tiles[x][y] not in self.light_level:
-								self.light_level[self.tiles[x][y]] = sqrt((x - start.x)**2 + (y - start.y)**2)
-							else:
-								self.light_level[self.tiles[x][y]] = max(self.light_level[self.tiles[x][y]], sqrt((x - start.x)**2 + (y - start.y)**2))
-				if self.tiles[x][y].seen and self.tiles[x][y] not in self.light_level:
-					tile = self.tiles[x][y]
-					self.tiles[x][y].draw(self.world, tile.darken(tile.color, .5), self.tile_length)
-
-	def calculate_FOV(self):
-		self.light_level = {}
-		self.a = 0
-		for entity in self.entities:
-			start = self.tiles[entity.x/self.tile_length][entity.y/self.tile_length]
-			entity_top = max(0, -self.camera_y/self.tile_length - 1 - entity.light_radius)
-			entity_bottom = min(self.world_height, (-self.camera_y + screen.get_height())/self.tile_length + 1 + entity.light_radius)
-			entity_left = max(0, -self.camera_x/self.tile_length - 1 - entity.light_radius)
-			entity_right = min(self.world_width, (-self.camera_x + screen.get_width())/self.tile_length + 1 + entity.light_radius)
-			#print entity_top, entity_bottom, entity_left, entity_right
-			if entity_top < start.y < entity_bottom and entity_left < start.x < entity_right:
-				self.recursive_draw_world(0, 1, 0, 0, 1, 1, 0, entity.x/self.tile_length, entity.y/self.tile_length, entity.light_radius)
-				self.recursive_draw_world(0, 1, 0, 1, 0, 0, 1, entity.x/self.tile_length, entity.y/self.tile_length, entity.light_radius)
-				self.recursive_draw_world(0, 1, 0, 0, -1, 1, 0, entity.x/self.tile_length, entity.y/self.tile_length, entity.light_radius)
-				self.recursive_draw_world(0, 1, 0, -1, 0, 0, 1, entity.x/self.tile_length, entity.y/self.tile_length, entity.light_radius)
-				self.recursive_draw_world(0, 1, 0, 0, 1, -1, 0, entity.x/self.tile_length, entity.y/self.tile_length, entity.light_radius)
-				self.recursive_draw_world(0, 1, 0, 1, 0, 0, -1, entity.x/self.tile_length, entity.y/self.tile_length, entity.light_radius)
-				self.recursive_draw_world(0, 1, 0, 0, -1, -1, 0, entity.x/self.tile_length, entity.y/self.tile_length, entity.light_radius)
-				self.recursive_draw_world(0, 1, 0, -1, 0, 0, -1, entity.x/self.tile_length, entity.y/self.tile_length, entity.light_radius)
-		for tile in self.light_level:
-			tile.draw(self.world, tile.darken(tile.color, self.light_level[tile]), self.tile_length)
-		#print self.a
-
-	#recursive function that implements FOV using shadowcasting
-	def recursive_draw_world(self, row, start, end, xx, xy, yx, yy, startx, starty, radius):
-		new_start = 0.
-		if start < end:
-			return
-		blocked = False
-		for distance in range(row, radius):
-			if not blocked:
-				dy = - distance
-				for dx in range(-distance, 1):
-					self.a += 1
-					currentx = startx + dx*xx + dy*xy
-					currenty = starty + dx*yx + dy*yy
-					left_slope = (dx - .5)/(dy + .5)
-					right_slope = (dx + .5)/(dy - .5)
-					#if valid tile
-					if not (0 <= currentx < self.world_width and 0 <= currenty < self.world_height) or start < right_slope:
-						continue
-					elif end > left_slope:
-						break
-					#if within entity's radius light if needed
-					if sqrt(dx**2 + dy**2) < radius:
-						bright = (1 - sqrt(dx**2 + dy**2)/radius/2)
-						if self.tiles[currentx][currenty] not in self.light_level or self.light_level[self.tiles[currentx][currenty]] < bright:
-							self.light_level[self.tiles[currentx][currenty]] = bright
-							if not self.tiles[currentx][currenty].seen:
-								self.tiles[currentx][currenty].seen = True
-					# if previous tile was blocking
-					if blocked:
-						if not self.tiles[currentx][currenty].transparent:
-							new_start = right_slope
-							continue
-						else:
-							blocked = False
-							start = new_start
-					#if we hit a wall withing entity's light radius
-					elif not self.tiles[currentx][currenty].transparent and distance < radius:
-						blocked = True
-						self.recursive_draw_world(distance + 1, start, left_slope, xx, xy, yx, yy, startx, starty, radius)
-						new_start = right_slope
+		for x in xrange(left, right):
+			for y in xrange(top, bottom):
+				if self.tiles[x][y].seen:
+					self.tiles[x][y].draw(self.world, self.tiles, self.tile_length, self.sheet)
 
 	#draws a line for every 
 	def draw_grid(self):
 		if self.show_grid:
 			length = self.tile_length
-			for x in range(screen.get_width()/length + 1):
+			for x in xrange(screen.get_width()/length + 1):
 				start = (length*x - self.camera_x/length*length, - self.camera_y)
 				end = (length*x - self.camera_x/length*length, screen.get_height() - self.camera_y)
 				draw.line(self.world, (200, 255, 200), start, end)
-			for y in range(screen.get_height()/length + 1):
+			for y in xrange(screen.get_height()/length + 1):
 				start = (-self.camera_x, length*y - self.camera_y/length*length)
 				end = (screen.get_width() - self.camera_x, length*y - self.camera_y/length*length)
 				draw.line(self.world, (200, 255, 200), start, end)
@@ -478,14 +402,8 @@ class GameState(State):
 				button.draw(screen, button.color)
 
 	def draw(self):
-		# timer(self.draw_FOV)
-		# timer(self.ray_cast_draw_world)
-		#self.calculate_FOV()
-		self.draw_world()
+		#self.draw_shadows()
 		self.draw_grid()
-		# for entity in self.entities:
-		# 	for path in entity.path:
-		# 		path.draw(self.world, path.color, self.tile_length)
 		self.draw_enities_selected()
 		self.draw_entities()
 		screen.blit(self.world, (self.camera_x, self.camera_y))
@@ -503,6 +421,14 @@ class GameState(State):
 				self.camera_y += 10
 			if self.mouse_y() > screen.get_height() - 50:
 				self.camera_y -= 10
+		if self.camera_x > 0:
+			self.camera_x = 0
+		if self.camera_x < -(self.world_width*self.tile_length - screen.get_width()):
+			self.camera_x = -(self.world_width*self.tile_length - screen.get_width())
+		if self.camera_y > 0:
+			self.camera_y = 0
+		if self.camera_y < -(self.world_height*self.tile_length - screen.get_height()):
+			self.camera_y = -(self.world_height*self.tile_length - screen.get_height())
 
 	def kill_dead_entities(self):
 		i = 0
@@ -516,7 +442,7 @@ class GameState(State):
 
 	def update_entities(self):
 		for entity in self.entities:
-			entity.update(self.entities, self.tile_length, self.tiles, self.frame)
+			entity.update(self.side_1_entities, self.side_2_entities, self.frame, self.tiles , self.tile_length)
 
 	def update(self):
 		self.update_camera()
@@ -530,5 +456,5 @@ class GameState(State):
 
 if __name__ == '__main__':
 	init()
-	screen = display.set_mode((1366, 768), FULLSCREEN)
+	screen = display.set_mode((1366, 768))
 	new_game = GameState(screen)

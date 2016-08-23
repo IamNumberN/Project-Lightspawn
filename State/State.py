@@ -94,7 +94,6 @@ class State():
 
 	def handle_update(self, screen):
 		while self.running:
-			self.frame += 1
 			a = time()
 			self.handle_events()
 			b = time()
@@ -103,6 +102,7 @@ class State():
 			self.handle_draw(screen)
 			d = time()
 			self.tick()	
+			self.frame += 1
 			with open("data.csv", "a") as csvfile:
 				write = writer(csvfile)
 				if d - a <.15:

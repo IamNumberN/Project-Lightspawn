@@ -5,11 +5,11 @@ class Tile:
 
 	def __init__(self, x, y):
 		self.type = 0
-		self.seen = False
+		self.seen = True
+		self.light_level = 0
 		self.blocked = False
 		self.level = 1
 		self.transparent = True
-		self.entities = []
 		self.color = (randrange(232, 242), randrange(196, 206), randrange(170, 180))
 		self.x = x
 		self.y = y
@@ -31,19 +31,10 @@ class Tile:
 			return_list.append(tiles[self.x - 1][self.y])
 		if self.x != world_width - 1:
 			return_list.append(tiles[self.x + 1][self.y])
-		# if self.y != 0 and self.x != 0:
-		# 	return_list.append(tiles[self.x - 1][self.y - 1])
-		# if self.y != 0 and self.x != world_width - 1:
-		# 	return_list.append(tiles[self.x + 1][self.y - 1])
-		# if self.y != world_height - 1 and self.x != 0:
-		# 	return_list.append(tiles[self.x - 1][self.y + 1])
-		# if self.y != world_height - 1 and self.x != world_width - 1:
-		# 	return_list.append(tiles[self.x + 1][self.y + 1])
 		return return_list
 
-	def draw(self, screen, color, length):
-		rect = Rect(self.x*length, self.y*length, length, length)
-		draw.rect(screen, color, rect)
+	def draw(self, screen, tile, length, sheet):
+		screen.blit(sheet[48], (self.x*length, self.y*length))
 
 	def update(self):
 		pass
