@@ -31,36 +31,33 @@ def stop_until_click():
 class GameState(State):
 
 	def setup(self):
-		self.show_grid = False
+		self.show_grid = True
 		self.move_camera = True
 		self.save = False
 		self.camera_x = 0
 		self.camera_y = 0
-		self.side_1_entities = []
-		self.side_2_entities = []
-		self.world_width = 100
-		self.world_height = 100
+
+		self.id = 0
+		self.entities = []
+		for x in range(64, 640, 32):
+			for y in range(64, 640, 32):
+				self.add_entity(x, y)
+
+		self.world_width = 200
+		self.world_height = 200
 		self.tile_length = 32
 		self.sheet = self.sheet_to_list(image.load("sheet.png"), 8, 6, 32)
-		self.world = Surface((self.world_width*self.tile_length, self.world_height*self.tile_length))
-		self.tiles = self.generate_tiles(self.world_width, self.world_height)
+
+		self.world_copy = Surface((self.world_width*self.tile_length, self.world_height*self.tile_length))
+		self.tiles = self.gen_rand_room(self.world_width, self.world_height)
 		self.draw_tiles()
+
 		self.buttons = [Button(self.load, 16, 16), Button(self.toggle_save, 64, 16), Button(self.zoom_in, 112, 16), Button(self.zoom_out, 160, 16)]
-		self.entities = self.side_1_entities +  self.side_2_entities
 		self.click_x = None
 		self.click_y = None
 		self.selection_box = None
-		self.entities_selected = self.side_1_entities
-		self.entities_selected0 = []
-		self.entities_selected1 = []
-		self.entities_selected2 = []
-		self.entities_selected3 = []
-		self.entities_selected4 = []
-		self.entities_selected5 = []
-		self.entities_selected6 = []
-		self.entities_selected7 = []
-		self.entities_selected8 = []
-		self.entities_selected9 = []
+		self.entities_selected = []
+		self.entities_selected_num = [[] for i in range(10)]
 		self.light_level = {}
 		self.load_file_name = None
 		self.click1 = None
@@ -73,14 +70,29 @@ class GameState(State):
 		return_lst.append(image.load("water.png"))
 		return return_lst
 
-
-	def generate_tiles(self, width, height):
+	def gen_BSP_room(self, width, height):
+		tiles = [[Tile(x, y) for y in xrange(height)] for x in xrange(width)]
 		self.tree = BSP_Node(0, 0, width, height)
 		self.tree.split()
-		tiles = [[Wall(x, y) for y in xrange(height)] for x in xrange(width)]
 		self.draw_leaves()
 		self.build_rooms(tiles)
 		self.build_hallways(tiles)
+		return tiles
+
+	def gen_rand_room(self, width, height):
+		tiles = [[Tile(x, y) for y in xrange(height)] for x in xrange(width)]
+		for x in range(width):
+			tiles[x][0] = Wall(x, 0)
+			tiles[x][height - 1] = Wall(x, height - 1)
+		for y in range(height):
+			tiles[0][y] = Wall(0, y)
+			tiles[width - 1][y] = Wall(width - 1, y)
+		for x in range(1, width - 1):
+			for y in range(1, height - 1):
+				if randrange(1):
+					tiles[x][y] = Wall(x, y)
+		tiles[1][1] = Tile(1, 1)
+		tiles[width - 2][height - 2] = Tile(width - 2, height - 2)
 		return tiles
 
 	def draw_leaves(self):
@@ -150,6 +162,12 @@ class GameState(State):
 			return None
 		else:
 			return self.tiles[x][y]
+
+	def add_entity(self, x, y):
+		new = Entity(x, y)
+		new.id = self.id
+		self.id += 1
+		self.entities.append(new)
 
 	#a function that is called when the load button is pressed. Replaces the current tiles with the save
 	#one in load_file_name.
@@ -225,7 +243,6 @@ class GameState(State):
 		keys = key.get_pressed()
 		for entity in self.entities:
 			if entity.rect.collidepoint(self.camera_mouse()):
-				print "why"
 				if keys[K_LSHIFT]:
 					for selected_entity in self.entities_selected:
 						entity.command_queue.append((entity.follow, (self.frame, selected_entity)))
@@ -239,27 +256,6 @@ class GameState(State):
 			else:
 				for selected_entity in self.entities_selected:
 					selected_entity.command_queue = [(selected_entity.move, (self.frame, self.mouse_tile()))]
-		# self.line_of_sight_ttt_test()
-
-	def pathfind_test(self):
-		for entity in self.entities_selected:
-			entity.a_star_with_path_smoothing(self.mouse_tile(), self.tiles, self.tile_length)
-			#entity.theta_star(screen, self.mouse_tile(), self.tiles, self.tile_length)
-
-	def line_of_sight_ttt_test(self):
-		if self.click1 != None:
-			print self.entities[0].draw_line_of_sight_tile_to_tile(screen, self.click1, self.mouse_tile(), self.tiles, self.tile_length)
-			self.click1 = None
-		else:
-			self.click1 = self.mouse_tile()
-
-	def line_of_sight_ptp_test(self):
-		if self.click1 != None:
-			print self.entities[0].draw_line_of_sight_point_to_point(screen, self.click1, self.camera_mouse(), self.tiles, self.tile_length)
-			self.click1 = None
-		else:
-			self.click1 = self.camera_mouse()
-
 
 	#if we are trying to select entities then adjust the size to our selection box
 	def mouse_moved(self):
@@ -289,64 +285,20 @@ class GameState(State):
 	#define control groups left ctrl and a number sets the group just he number reselects it
 	def keys(self):
 		keys = key.get_pressed()
-		if keys[K_LCTRL] and keys[K_0]:
-			self.entities_selected0 = self.entities_selected
-		if not keys[K_LCTRL] and keys[K_1] and self.entities_selected0 != []:
-			self.entities_selected = self.entities_selected0
-		if keys[K_LCTRL] and keys[K_1]:
-			self.entities_selected1 = self.entities_selected
-		if not keys[K_LCTRL] and keys[K_1] and self.entities_selected1 != []:
-			self.entities_selected = self.entities_selected1
-		if keys[K_LCTRL] and keys[K_2]:
-			self.entities_selected2 = self.entities_selected
-		if not keys[K_LCTRL] and keys[K_2] and self.entities_selected2 != []:
-			self.entities_selected = self.entities_selected2
-		if keys[K_LCTRL] and keys[K_3]:
-			self.entities_selected3 = self.entities_selected
-		if not keys[K_LCTRL] and keys[K_3] and self.entities_selected3 != []:
-			self.entities_selected = self.entities_selected3
-		if keys[K_LCTRL] and keys[K_4]:
-			self.entities_selected4 = self.entities_selected
-		if not keys[K_LCTRL] and keys[K_4] and self.entities_selected4 != []:
-			self.entities_selected = self.entities_selected4
-		if keys[K_LCTRL] and keys[K_5]:
-			self.entities_selected5 = self.entities_selected
-		if not keys[K_LCTRL] and keys[K_5] and self.entities_selected5 != []:
-			self.entities_selected = self.entities_selected5
-		if keys[K_LCTRL] and keys[K_6]:
-			self.entities_selected6 = self.entities_selected
-		if not keys[K_LCTRL] and keys[K_6] and self.entities_selected6 != []:
-			self.entities_selected = self.entities_selected6
-		if keys[K_LCTRL] and keys[K_7]:
-			self.entities_selected7 = self.entities_selected
-		if not keys[K_LCTRL] and keys[K_7] and self.entities_selected7 != []:
-			self.entities_selected = self.entities_selected7
-		if keys[K_LCTRL] and keys[K_8]:
-			self.entities_selected8 = self.entities_selected
-		if not keys[K_LCTRL] and keys[K_8] and self.entities_selected8 != []:
-			self.entities_selected = self.entities_selected8
-		if keys[K_LCTRL] and keys[K_9]:
-			self.entities_selected9 = self.entities_selected
-		if not keys[K_LCTRL] and keys[K_9] and self.entities_selected9 != []:
-			self.entities_selected = self.entities_selected9
+		for i in range(10):		
+			if not keys[K_LCTRL] and keys[K_0 + i] and self.entities_selected_num[i] != []:
+				self.entities_selected = self.entities_selected_num[i]
+			if keys[K_LCTRL] and keys[K_0 + i]:
+				self.entities_selected_num[i] = self.entities_selected
 		if keys[K_s]:
 			for entity in self.entities_selected:
 				entity.stop()
-		for entity in self.entities_selected:
-			entity.keys()
 
 	#for every tile on screen that isn't drawn yet draw the tile
 	def draw_tiles(self):
-		top = max(0, -self.camera_y/self.tile_length - 1)
-		bottom = min(self.world_height, (-self.camera_y + screen.get_height())/self.tile_length + 1)
-		left = max(0, -self.camera_x/self.tile_length - 1)
-		right = min(self.world_width, (-self.camera_x + screen.get_width())/self.tile_length + 1)
 		for x in xrange(len(self.tiles)):
 			for y in xrange(len(self.tiles[0])):
-				self.tiles[x][y].draw(self.world, self.tiles, self.tile_length, self.sheet)
-
-	def draw_world(self):
-		screen.blit(self.world, )
+				self.tiles[x][y].draw(self.world_copy, self.tiles, self.tile_length, self.sheet)
 
 	def draw_shadows(self):
 		top = max(0, -self.camera_y/self.tile_length - 1)
@@ -402,11 +354,12 @@ class GameState(State):
 				button.draw(screen, button.color)
 
 	def draw(self):
-		#self.draw_shadows()
+		screen.fill((0, 0, 0))
+		self.world = self.world_copy
 		self.draw_grid()
 		self.draw_enities_selected()
 		self.draw_entities()
-		screen.blit(self.world, (self.camera_x, self.camera_y))
+		screen.blit(self.world_copy, (0, 0), (-self.camera_x, -self.camera_y, screen.get_width(), screen.get_height()))
 		self.draw_selection_box()
 		self.draw_buttons()
 		display.update()
@@ -421,14 +374,6 @@ class GameState(State):
 				self.camera_y += 10
 			if self.mouse_y() > screen.get_height() - 50:
 				self.camera_y -= 10
-		if self.camera_x > 0:
-			self.camera_x = 0
-		if self.camera_x < -(self.world_width*self.tile_length - screen.get_width()):
-			self.camera_x = -(self.world_width*self.tile_length - screen.get_width())
-		if self.camera_y > 0:
-			self.camera_y = 0
-		if self.camera_y < -(self.world_height*self.tile_length - screen.get_height()):
-			self.camera_y = -(self.world_height*self.tile_length - screen.get_height())
 
 	def kill_dead_entities(self):
 		i = 0
@@ -442,7 +387,15 @@ class GameState(State):
 
 	def update_entities(self):
 		for entity in self.entities:
-			entity.update(self.side_1_entities, self.side_2_entities, self.frame, self.tiles , self.tile_length)
+			entity.update()
+
+	def grid_population(self):
+		grid_width = self.world_width/2
+		grid_height = self.world_height/2
+		array = [None for i in range(len(grid_width))]
+		for entity in self.entities:
+			entity_overlap = []
+			for 
 
 	def update(self):
 		self.update_camera()

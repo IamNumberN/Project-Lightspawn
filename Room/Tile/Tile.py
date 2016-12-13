@@ -18,8 +18,11 @@ class Tile:
 	def setup(self):
 		pass
 
-	def darken(self, color, mag):
-		return (min(int(mag*color[0]), 255), min(int(mag*color[1]), 255), min(int(mag*color[2]), 255))
+	def pix_x(self, length):
+		return (self.x + .5)*length
+
+	def pix_y(self, length):
+		return (self.y + .5)*length
 	
 	def get_neighbors(self, world_height, world_width, tiles):
 		return_list = []
